@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beer Timer</title>
+    <style>
+        body {
+            background: #222;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .glass-container {
+            position: relative;
+            width: 200px;
+            height: 400px;
+            border: 6px solid #ccc;
+            border-top-left-radius: 100px 40px;
+            border-top-right-radius: 100px 40px;
+            border-bottom: none;
+            overflow: hidden;
+            background: rgba(255,255,255,0.1);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .beer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, #e08d00 20%, #ffcc33 80%);
+            transition: height 1s linear;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .foam {
+            position: absolute;
+            bottom: 100%;
+            width: 100%;
+            height: 40px;
+            background: #fff;
+            border-top-left-radius: 40px;
+            border-top-right-radius: 40px;
+            opacity: 0.8;
+        }
+
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type=number] {
+            width: 80px;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #333;
+            color: #eee;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5a6bd8;
+        }
+
+        .percentage {
+            margin-top: 10px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <h1>🍺 Beer Timer</h1>
+    <div class="glass-container" id="glass">
+        <div class="beer" id="beer">
+            <div class="foam"></div>
+        </div>
+    </div>
+
+    <div class="percentage" id="perc">100%</div>
+    <div class="controls">
+        <input type="number" id="duration" min="1" value="60"> <span>seconds</span>
+        <button id="startBtn">Start</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+
+
+
+    <script>
+        const beerEl = document.getElementById('beer');
+        const percEl = document.getElementById('perc');
+        const durationInput = document.getElementById('duration');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        // audio context reference (created on first user interaction)
+        let audioCtx = null;
+
+        function ensureAudioCtx() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // create beep using Web Audio API
+        function playBeep(duration=1500, frequency=440, volume=0.5) {
+            ensureAudioCtx();
+            const oscillator = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            oscillator.connect(gain);
+            gain.connect(audioCtx.destination);
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+            gain.gain.value = volume;
+            oscillator.start();
+            setTimeout(() => {
+                oscillator.stop();
+            }, duration);
+        }
+
+        let timer = null;
+        let totalSeconds = parseFloat(durationInput.value);
+        let remaining = totalSeconds;
+
+        function updateBeer() {
+            const percent = (remaining / totalSeconds) * 100;
+            beerEl.style.height = percent + '%';
+            percEl.textContent = Math.ceil(percent) + '%';
+        }
+
+        function startTimer() {
+            if (timer) return;
+            ensureAudioCtx();
+            totalSeconds = parseFloat(durationInput.value);
+            if (!totalSeconds || totalSeconds <= 0) return;
+            remaining = totalSeconds;
+            updateBeer();
+            timer = setInterval(() => {
+                remaining -= 1;
+                if (remaining < 0) {
+                    clearInterval(timer);
+                    timer = null;
+                    beerEl.style.height = '0%';
+                    percEl.textContent = '0%';
+                    playBeep();
+                    return;
+                }
+                updateBeer();
+            }, 1000);
+        }
+
+        function resetTimer() {
+            clearInterval(timer);
+            timer = null;
+            remaining = totalSeconds;
+            updateBeer();
+        }
+
+        startBtn.addEventListener('click', startTimer);
+        resetBtn.addEventListener('click', resetTimer);
+
+        // allow changing duration while stopped
+        durationInput.addEventListener('change', () => {
+            if (!timer) {
+                totalSeconds = parseFloat(durationInput.value);
+                remaining = totalSeconds;
+                updateBeer();
+            }
+        });
+
+        updateBeer();
+    </script>
+</body>
+</html>
