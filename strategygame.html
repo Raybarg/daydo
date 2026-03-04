@@ -310,14 +310,37 @@
             }
 
             produce() {
-                const workers = this.population.getWorkerCount();
-                const efficiency = this.population.getTotalEfficiency();
+                const engineers = this.population.colonists.filter(c => c.role === 'Engineer');
+                const scientists = this.population.colonists.filter(c => c.role === 'Scientist');
+                const workers = this.population.colonists.filter(c => c.role === 'Worker');
+                const managers = this.population.colonists.filter(c => c.role === 'Manager');
                 
-                this.resources.energy += workers * efficiency * 2;
-                this.resources.minerals += workers * efficiency * 1.5;
-                this.resources.food += workers * efficiency * 2;
+                const avgEfficiency = this.population.getTotalEfficiency();
                 
-                // Consume resources
+                // Engineers produce energy and minerals
+                engineers.forEach(e => {
+                    this.resources.energy += e.efficiency * e.level * 3;
+                    this.resources.minerals += e.efficiency * e.level * 2.5;
+                });
+                
+                // Scientists produce technology
+                scientists.forEach(s => {
+                    this.resources.technology += s.efficiency * s.level * 3;
+                });
+                
+                // Workers produce food and general resources
+                workers.forEach(w => {
+                    this.resources.food += w.efficiency * w.level * 3;
+                    this.resources.energy += w.efficiency * w.level * 0.5;
+                });
+                
+                // Managers boost overall production
+                const managerBonus = 1 + (managers.length * 0.05);
+                this.resources.energy *= managerBonus;
+                this.resources.minerals *= managerBonus;
+                this.resources.technology *= managerBonus;
+                
+                // Consume resources based on population
                 const populationSize = this.population.getPopulationCount();
                 this.resources.food -= populationSize * 0.5;
                 this.resources.energy -= populationSize * 0.3;
