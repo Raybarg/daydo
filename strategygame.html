@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Strategy Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0e27;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: rgba(0, 255, 136, 0.05);
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
+        }
+
+        .panel h2 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 10px;
+        }
+
+        .colony-item {
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 3px solid #00ff88;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .colony-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+            transform: translateX(5px);
+        }
+
+        .colony-item.active {
+            background: rgba(0, 255, 136, 0.2);
+            border-left: 5px solid #00ff88;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+
+        .stat-name {
+            color: #00ccff;
+        }
+
+        .stat-value {
+            color: #ffff00;
+            font-weight: bold;
+        }
+
+        .population-bar {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff88;
+            height: 20px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .population-fill {
+            background: linear-gradient(to right, #00ff88, #00ccff);
+            height: 100%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7em;
+            color: #000;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #00ccff;
+            box-shadow: 0 0 10px #00ccff;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .details-panel {
+            grid-column: 1 / -1;
+        }
+
+        .colonist-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .colonist-card {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .colonist-name {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .colonist-skill {
+            font-size: 0.85em;
+            margin: 4px 0;
+        }
+
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00ff88;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.85em;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            color: #00ccff;
+        }
+
+        .log-entry.success {
+            color: #00ff88;
+        }
+
+        .log-entry.warning {
+            color: #ffff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 SPACE COLONIZATION STRATEGY</h1>
+
+        <div class="game-grid">
+            <div class="panel">
+                <h2>Colonies</h2>
+                <div id="coloniesList"></div>
+                <div class="controls">
+                    <button id="addColonyBtn">+ New Colony</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Resources & Stats</h2>
+                <div id="colonyStats"></div>
+            </div>
+
+            <div class="panel details-panel">
+                <h2>Population Details</h2>
+                <div id="populationDetails"></div>
+            </div>
+
+            <div class="panel details-panel">
+                <h2>Event Log</h2>
+                <div class="log" id="eventLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== CLASS HIERARCHY ====================
+
+        class Colonist {
+            constructor(name, role) {
+                this.id = Math.random().toString(36).substr(2, 9);
+                this.name = name;
+                this.role = role;
+                this.level = 1;
+                this.happiness = 75;
+                this.efficiency = 0.5 + Math.random() * 0.5;
+            }
+
+            work() {
+                this.efficiency = Math.max(0.3, this.efficiency - 0.05);
+                this.happiness = Math.max(0, this.happiness - 2);
+                return this.efficiency * this.level;
+            }
+
+            rest() {
+                this.efficiency = Math.min(1, this.efficiency + 0.15);
+                this.happiness = Math.min(100, this.happiness + 5);
+            }
+
+            toString() {
+                return `${this.name} (${this.role}) - Lvl ${this.level}`;
+            }
+        }
+
+        class Population {
+            constructor(colonyName) {
+                this.colonyName = colonyName;
+                this.colonists = [];
+                this.maxCapacity = 100;
+                this.morale = 70;
+            }
+
+            addColonist(name, role = 'Worker') {
+                if (this.colonists.length >= this.maxCapacity) {
+                    return false;
+                }
+                const colonist = new Colonist(name, role);
+                this.colonists.push(colonist);
+                return true;
+            }
+
+            getPopulationCount() {
+                return this.colonists.length;
+            }
+
+            getWorkerCount(role = null) {
+                if (role) {
+                    return this.colonists.filter(c => c.role === role).length;
+                }
+                return this.colonists.length;
+            }
+
+            getTotalEfficiency() {
+                if (this.colonists.length === 0) return 0;
+                return this.colonists.reduce((sum, c) => sum + c.efficiency, 0) / this.colonists.length;
+            }
+
+            updateMorale() {
+                const avgHappiness = this.colonists.length > 0 
+                    ? this.colonists.reduce((sum, c) => sum + c.happiness, 0) / this.colonists.length
+                    : 70;
+                this.morale = avgHappiness;
+            }
+
+            toString() {
+                return `Population: ${this.getPopulationCount()}/${this.maxCapacity}`;
+            }
+        }
+
+        class Colony {
+            constructor(name, planet) {
+                this.id = Math.random().toString(36).substr(2, 9);
+                this.name = name;
+                this.planet = planet;
+                this.population = new Population(name);
+                this.resources = {
+                    energy: 100,
+                    minerals: 50,
+                    food: 80,
+                    technology: 20
+                };
+                this.level = 1;
+                this.createdDate = new Date();
+            }
+
+            produce() {
+                const workers = this.population.getWorkerCount();
+                const efficiency = this.population.getTotalEfficiency();
+                
+                this.resources.energy += workers * efficiency * 2;
+                this.resources.minerals += workers * efficiency * 1.5;
+                this.resources.food += workers * efficiency * 2;
+                
+                // Consume resources
+                const populationSize = this.population.getPopulationCount();
+                this.resources.food -= populationSize * 0.5;
+                this.resources.energy -= populationSize * 0.3;
+
+                this.population.updateMorale();
+            }
+
+            upgrade() {
+                if (this.resources.technology >= 50) {
+                    this.resources.technology -= 50;
+                    this.level += 1;
+                    this.population.maxCapacity += 50;
+                    return true;
+                }
+                return false;
+            }
+
+            trainColonist(colonistId) {
+                const colonist = this.population.colonists.find(c => c.id === colonistId);
+                if (colonist && this.resources.technology >= 10) {
+                    colonist.level += 1;
+                    this.resources.technology -= 10;
+                    return true;
+                }
+                return false;
+            }
+
+            toString() {
+                return `${this.name} (${this.planet}) - Level ${this.level}`;
+            }
+        }
+
+        // ==================== GAME STATE ====================
+
+        class Game {
+            constructor() {
+                this.colonies = [];
+                this.selectedColony = null;
+                this.log = [];
+                this.init();
+            }
+
+            init() {
+                // Create initial colony
+                const startingColony = new Colony('Alpha Base', 'Mars');
+                startingColony.population.addColonist('John', 'Engineer');
+                startingColony.population.addColonist('Sarah', 'Scientist');
+                startingColony.population.addColonist('Mike', 'Worker');
+                this.colonies.push(startingColony);
+                this.selectedColony = startingColony;
+                this.addLog('Game started. Alpha Base established on Mars.', 'success');
+            }
+
+            addColony() {
+                const planets = ['Venus', 'Mercury', 'Jupiter', 'Saturn', 'Europa'];
+                const randomPlanet = planets[Math.floor(Math.random() * planets.length)];
+                const colonyName = `Base ${String.fromCharCode(64 + this.colonies.length + 1)}`;
+                
+                const newColony = new Colony(colonyName, randomPlanet);
+                newColony.population.addColonist(colonyName + ' Administrator', 'Manager');
+                this.colonies.push(newColony);
+                this.selectedColony = newColony;
+                this.addLog(`New colony "${colonyName}" established on ${randomPlanet}.`, 'success');
+            }
+
+            tick() {
+                this.colonies.forEach(colony => {
+                    colony.produce();
+                });
+                this.render();
+            }
+
+            addLog(message, type = 'info') {
+                this.log.unshift({ message, type, time: new Date() });
+                if (this.log.length > 50) this.log.pop();
+            }
+
+            render() {
+                renderColonies();
+                renderStats();
+                renderPopulation();
+                renderLog();
+            }
+        }
+
+        // ==================== GAME INSTANCE ====================
+
+        const game = new Game();
+
+        // ==================== UI FUNCTIONS ====================
+
+        function renderColonies() {
+            const list = document.getElementById('coloniesList');
+            list.innerHTML = '';
+            
+            game.colonies.forEach(colony => {
+                const div = document.createElement('div');
+                div.className = 'colony-item' + (colony.id === game.selectedColony?.id ? ' active' : '');
+                div.innerHTML = `
+                    <strong>${colony.name}</strong> - ${colony.planet}<br>
+                    <small>Level ${colony.level} | Pop: ${colony.population.getPopulationCount()}/${colony.population.maxCapacity}</small>
+                `;
+                div.addEventListener('click', () => {
+                    game.selectedColony = colony;
+                    game.render();
+                });
+                list.appendChild(div);
+            });
+        }
+
+        function renderStats() {
+            if (!game.selectedColony) return;
+            
+            const colony = game.selectedColony;
+            const stats = document.getElementById('colonyStats');
+            
+            stats.innerHTML = `
+                <div class="stat">
+                    <span class="stat-name">Colony Name:</span>
+                    <span class="stat-value">${colony.name}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Level:</span>
+                    <span class="stat-value">${colony.level}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Population:</span>
+                    <span class="stat-value">${colony.population.getPopulationCount()} / ${colony.population.maxCapacity}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Morale:</span>
+                    <span class="stat-value">${Math.round(colony.population.morale)}%</span>
+                </div>
+                <hr style="margin: 15px 0; border: 1px solid #00ff88;">
+                <div class="stat">
+                    <span class="stat-name">Energy:</span>
+                    <span class="stat-value">${Math.round(colony.resources.energy)}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Minerals:</span>
+                    <span class="stat-value">${Math.round(colony.resources.minerals)}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Food:</span>
+                    <span class="stat-value">${Math.round(colony.resources.food)}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Technology:</span>
+                    <span class="stat-value">${Math.round(colony.resources.technology)}</span>
+                </div>
+                <div class="controls">
+                    <button onclick="upgradeColony()">Upgrade Colony (50 Tech)</button>
+                    <button onclick="addColonist()">Add Colonist (50 Energy)</button>
+                </div>
+            `;
+        }
+
+        function renderPopulation() {
+            if (!game.selectedColony) return;
+            
+            const colony = game.selectedColony;
+            const pop = colony.population;
+            const details = document.getElementById('populationDetails');
+            
+            let html = `
+                <div class="stat">
+                    <span class="stat-name">Total Morale:</span>
+                    <span class="stat-value">${Math.round(pop.morale)}%</span>
+                </div>
+                <div class="population-bar">
+                    <div class="population-fill" style="width: ${(pop.getPopulationCount() / pop.maxCapacity) * 100}%">
+                        ${pop.getPopulationCount()} / ${pop.maxCapacity}
+                    </div>
+                </div>
+                <h3 style="margin-top: 20px; color: #00ccff;">Colonists:</h3>
+                <div class="colonist-list">
+            `;
+            
+            pop.colonists.forEach(colonist => {
+                html += `
+                    <div class="colonist-card">
+                        <div class="colonist-name">${colonist.name}</div>
+                        <div class="colonist-skill">Role: ${colonist.role}</div>
+                        <div class="colonist-skill">Level: ${colonist.level}</div>
+                        <div class="colonist-skill">Happiness: ${Math.round(colonist.happiness)}%</div>
+                        <div class="colonist-skill">Efficiency: ${(colonist.efficiency * 100).toFixed(0)}%</div>
+                        <button onclick="trainColonist('${colonist.id}')" style="margin-top: 8px; width: 100%;">Train (10 Tech)</button>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            details.innerHTML = html;
+        }
+
+        function renderLog() {
+            const logDiv = document.getElementById('eventLog');
+            logDiv.innerHTML = game.log.map(entry => 
+                `<div class="log-entry ${entry.type}">${entry.message}</div>`
+            ).join('');
+        }
+
+        function upgradeColony() {
+            if (game.upgrade()) {
+                game.addLog(`${game.selectedColony.name} upgraded to level ${game.selectedColony.level}!`, 'success');
+                game.render();
+            } else {
+                game.addLog('Not enough technology to upgrade.', 'warning');
+            }
+        }
+
+        function addColonist() {
+            const colony = game.selectedColony;
+            if (colony.resources.energy >= 50) {
+                colony.resources.energy -= 50;
+                const roles = ['Engineer', 'Scientist', 'Worker', 'Manager'];
+                const role = roles[Math.floor(Math.random() * roles.length)];
+                const names = ['Alex', 'Bailey', 'Casey', 'Dana', 'Elena', 'Felix', 'Grace', 'Henry'];
+                const name = names[Math.floor(Math.random() * names.length)];
+                
+                if (colony.population.addColonist(name, role)) {
+                    game.addLog(`${name} (${role}) arrived at ${colony.name}.`, 'success');
+                } else {
+                    game.addLog(`${colony.name} is at maximum capacity!`, 'warning');
+                    colony.resources.energy += 50;
+                }
+                game.render();
+            } else {
+                game.addLog('Not enough energy to add colonist.', 'warning');
+            }
+        }
+
+        function trainColonist(colonistId) {
+            if (game.selectedColony.trainColonist(colonistId)) {
+                const colonist = game.selectedColony.population.colonists.find(c => c.id === colonistId);
+                game.addLog(`${colonist.name} trained to level ${colonist.level}!`, 'success');
+                game.render();
+            } else {
+                game.addLog('Not enough technology.', 'warning');
+            }
+        }
+
+        // Game loop
+        setInterval(() => {
+            game.tick();
+        }, 2000);
+
+        // Initial render
+        game.render();
+
+        // Button handlers
+        document.getElementById('addColonyBtn').addEventListener('click', () => {
+            game.addColony();
+            game.render();
+        });
+    </script>
+</body>
+</html>
