@@ -380,37 +380,118 @@
             }
         }
 
+        class Room {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.centerX = Math.floor(x + width / 2);
+                this.centerY = Math.floor(y + height / 2);
+            }
+
+            intersects(other) {
+                return !(this.x + this.width < other.x || 
+                        other.x + other.width < this.x || 
+                        this.y + this.height < other.y || 
+                        other.y + other.height < this.y);
+            }
+        }
+
         class Map {
             constructor(width, height) {
                 this.width = width;
                 this.height = height;
                 this.tiles = [];
+                this.rooms = [];
                 this.generate();
             }
 
             generate() {
-                // Simple room generation
+                // Initialize all tiles as walls
                 this.tiles = [];
                 for (let y = 0; y < this.height; y++) {
                     this.tiles[y] = [];
                     for (let x = 0; x < this.width; x++) {
-                        if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
-                            this.tiles[y][x] = TILES.WALL;
-                        } else {
-                            this.tiles[y][x] = TILES.FLOOR;
-                        }
+                        this.tiles[y][x] = TILES.WALL;
                     }
                 }
 
-                // Add some random walls
-                for (let i = 0; i < 50; i++) {
-                    const x = Math.floor(Math.random() * (this.width - 2)) + 1;
-                    const y = Math.floor(Math.random() * (this.height - 2)) + 1;
-                    this.tiles[y][x] = TILES.WALL;
+                // Generate rooms
+                this.rooms = [];
+                const maxRooms = 8;
+                const minRoomSize = 5;
+                const maxRoomSize = 12;
+
+                for (let i = 0; i < maxRooms; i++) {
+                    const width = Math.floor(Math.random() * (maxRoomSize - minRoomSize)) + minRoomSize;
+                    const height = Math.floor(Math.random() * (maxRoomSize - minRoomSize)) + minRoomSize;
+                    const x = Math.floor(Math.random() * (this.width - width - 2)) + 1;
+                    const y = Math.floor(Math.random() * (this.height - height - 2)) + 1;
+
+                    const newRoom = new Room(x, y, width, height);
+                    let intersects = false;
+
+                    for (let existingRoom of this.rooms) {
+                        if (newRoom.intersects(existingRoom)) {
+                            intersects = true;
+                            break;
+                        }
+                    }
+
+                    if (!intersects) {
+                        this.carveRoom(newRoom);
+                        if (this.rooms.length > 0) {
+                            this.connectRooms(this.rooms[this.rooms.length - 1], newRoom);
+                        }
+                        this.rooms.push(newRoom);
+                    }
                 }
 
-                // Add stairs down
-                this.tiles[this.height - 2][this.width - 2] = TILES.STAIRS_DOWN;
+                // Place stairs in the last room
+                if (this.rooms.length > 0) {
+                    const lastRoom = this.rooms[this.rooms.length - 1];
+                    this.tiles[lastRoom.centerY][lastRoom.centerX] = TILES.STAIRS_DOWN;
+                }
+            }
+
+            carveRoom(room) {
+                for (let y = room.y; y < room.y + room.height; y++) {
+                    for (let x = room.x; x < room.x + room.width; x++) {
+                        this.tiles[y][x] = TILES.FLOOR;
+                    }
+                }
+            }
+
+            connectRooms(room1, room2) {
+                // Random choice of horizontal first or vertical first corridor
+                if (Math.random() < 0.5) {
+                    this.carveHorizontalCorridor(room1.centerX, room2.centerX, room1.centerY);
+                    this.carveVerticalCorridor(room2.centerX, room1.centerY, room2.centerY);
+                } else {
+                    this.carveVerticalCorridor(room1.centerX, room1.centerY, room2.centerY);
+                    this.carveHorizontalCorridor(room1.centerX, room2.centerX, room2.centerY);
+                }
+            }
+
+            carveHorizontalCorridor(x1, x2, y) {
+                const start = Math.min(x1, x2);
+                const end = Math.max(x1, x2) + 1;
+                for (let x = start; x < end; x++) {
+                    if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                        this.tiles[y][x] = TILES.FLOOR;
+                    }
+                }
+            }
+
+            carveVerticalCorridor(x, y1, y2) {
+                const start = Math.min(y1, y2);
+                const end = Math.max(y1, y2) + 1;
+                for (let y = start; y < end; y++) {
+                    if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                        this.tiles[y][x] = TILES.FLOOR;
+                    }
+                }
             }
 
             isWalkable(x, y) {
@@ -431,7 +512,8 @@
         class Game {
             constructor() {
                 this.map = new Map(MAP_WIDTH, MAP_HEIGHT);
-                this.player = new Player(5, 5);
+                const startRoom = this.map.rooms[0];
+                this.player = new Player(startRoom.centerX, startRoom.centerY);
                 this.entities = [];
                 this.floor = 1;
                 this.messages = [];
@@ -507,9 +589,10 @@
 
             nextFloor() {
                 this.floor++;
-                this.map.generate();
-                this.player.x = 5;
-                this.player.y = 5;
+                this.map = new Map(MAP_WIDTH, MAP_HEIGHT);
+                const startRoom = this.map.rooms[0];
+                this.player.x = startRoom.centerX;
+                this.player.y = startRoom.centerY;
                 this.generateEntities();
                 this.addMessage(`Welcome to floor ${this.floor}!`, 'system');
                 this.updateStats();
