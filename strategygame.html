@@ -360,10 +360,14 @@
 
             trainColonist(colonistId) {
                 const colonist = this.population.colonists.find(c => c.id === colonistId);
-                if (colonist && this.resources.technology >= 10) {
-                    colonist.level += 1;
-                    this.resources.technology -= 10;
-                    return true;
+                if (colonist) {
+                    // Exponential cost: 10 * 2^(current level - 1)
+                    const trainCost = 10 * Math.pow(2, colonist.level - 1);
+                    if (this.resources.technology >= trainCost) {
+                        colonist.level += 1;
+                        this.resources.technology -= trainCost;
+                        return true;
+                    }
                 }
                 return false;
             }
@@ -380,6 +384,7 @@
                 this.colonies = [];
                 this.selectedColony = null;
                 this.log = [];
+                this.coloniesCreated = 1; // Track number of colonies created
                 this.init();
             }
 
@@ -395,6 +400,16 @@
             }
 
             addColony() {
+                // Calculate cost: 10000 * 2^(number of colonies - 1)
+                const colonyCost = 10000 * Math.pow(2, this.colonies.length);
+                
+                if (this.selectedColony.resources.energy < colonyCost) {
+                    this.addLog(`Not enough energy to establish new colony. Need ${Math.round(colonyCost)} energy.`, 'warning');
+                    return;
+                }
+                
+                this.selectedColony.resources.energy -= colonyCost;
+                
                 const planets = ['Venus', 'Mercury', 'Jupiter', 'Saturn', 'Europa'];
                 const randomPlanet = planets[Math.floor(Math.random() * planets.length)];
                 const colonyName = `Base ${String.fromCharCode(64 + this.colonies.length + 1)}`;
@@ -403,7 +418,7 @@
                 newColony.population.addColonist(colonyName + ' Administrator', 'Manager');
                 this.colonies.push(newColony);
                 this.selectedColony = newColony;
-                this.addLog(`New colony "${colonyName}" established on ${randomPlanet}.`, 'success');
+                this.addLog(`New colony "${colonyName}" established on ${randomPlanet}. Cost: ${Math.round(colonyCost)} energy.`, 'success');
             }
 
             tick() {
@@ -494,6 +509,7 @@
                 <div class="controls">
                     <button onclick="upgradeColony()">Upgrade Colony (50 Tech)</button>
                     <button onclick="addColonist()">Add Colonist (50 Energy)</button>
+                    <button onclick="addNewColony()">New Colony (${10000 * Math.pow(2, game.colonies.length)} Energy)</button>
                 </div>
             `;
         }
@@ -527,7 +543,7 @@
                         <div class="colonist-skill">Level: ${colonist.level}</div>
                         <div class="colonist-skill">Happiness: ${Math.round(colonist.happiness)}%</div>
                         <div class="colonist-skill">Efficiency: ${(colonist.efficiency * 100).toFixed(0)}%</div>
-                        <button onclick="trainColonist('${colonist.id}')" style="margin-top: 8px; width: 100%;">Train (10 Tech)</button>
+                        <button onclick="trainColonist('${colonist.id}')" style="margin-top: 8px; width: 100%;">Train (${10 * Math.pow(2, colonist.level - 1)} Tech)</button>
                     </div>
                 `;
             });
@@ -581,6 +597,11 @@
             } else {
                 game.addLog('Not enough technology.', 'warning');
             }
+        }
+
+        function addNewColony() {
+            game.addColony();
+            game.render();
         }
 
         // Game loop

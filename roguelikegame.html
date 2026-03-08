@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roguelike Dungeon Crawler</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.2;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .game-area {
+            background: #000;
+            border: 2px solid #0f0;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow: auto;
+            max-height: 600px;
+        }
+
+        .sidebar {
+            background: #111;
+            border: 2px solid #0f0;
+            padding: 15px;
+        }
+
+        .stats {
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-name {
+            color: #0f0;
+        }
+
+        .stat-value {
+            color: #ff0;
+            font-weight: bold;
+        }
+
+        .inventory {
+            margin-bottom: 20px;
+        }
+
+        .inventory-item {
+            background: #222;
+            padding: 5px;
+            margin-bottom: 5px;
+            border-left: 3px solid #0f0;
+            cursor: pointer;
+        }
+
+        .inventory-item:hover {
+            background: #333;
+        }
+
+        .messages {
+            background: #000;
+            border: 1px solid #0f0;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .message {
+            margin-bottom: 3px;
+        }
+
+        .message.player {
+            color: #0ff;
+        }
+
+        .message.enemy {
+            color: #f00;
+        }
+
+        .message.item {
+            color: #ff0;
+        }
+
+        .message.system {
+            color: #0f0;
+        }
+
+        .controls {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .health-bar {
+            background: #333;
+            height: 20px;
+            border: 1px solid #0f0;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+
+        .health-fill {
+            background: linear-gradient(to right, #f00, #ff0, #0f0);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #0ff;
+        }
+
+        button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="game-area" id="gameArea"></div>
+        
+        <div class="sidebar">
+            <div class="stats">
+                <h3>Player Stats</h3>
+                <div class="stat">
+                    <span class="stat-name">Level:</span>
+                    <span class="stat-value" id="playerLevel">1</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">XP:</span>
+                    <span class="stat-value" id="playerXP">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Health:</span>
+                    <span class="stat-value" id="playerHealth">100/100</span>
+                </div>
+                <div class="health-bar">
+                    <div class="health-fill" id="healthBar" style="width: 100%"></div>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Attack:</span>
+                    <span class="stat-value" id="playerAttack">10</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Defense:</span>
+                    <span class="stat-value" id="playerDefense">5</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-name">Floor:</span>
+                    <span class="stat-value" id="currentFloor">1</span>
+                </div>
+            </div>
+
+            <div class="inventory">
+                <h3>Inventory</h3>
+                <div id="inventoryList"></div>
+            </div>
+
+            <div class="messages" id="messages"></div>
+
+            <div class="controls">
+                <h4>Controls:</h4>
+                <p>Arrow Keys / WASD: Move</p>
+                <p>Space: Wait turn</p>
+                <p>Numbers: Use items</p>
+                <p>&gt;: Go to next floor</p>
+                <button id="newGameBtn">New Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== GAME CONSTANTS ====================
+
+        const MAP_WIDTH = 80;
+        const MAP_HEIGHT = 25;
+        const VIEWPORT_WIDTH = 60;
+        const VIEWPORT_HEIGHT = 20;
+
+        // Tile types
+        const TILES = {
+            WALL: '#',
+            FLOOR: '.',
+            DOOR: '+',
+            STAIRS_DOWN: '>',
+            STAIRS_UP: '<'
+        };
+
+        // Entity symbols
+        const ENTITIES = {
+            PLAYER: '@',
+            GOBLIN: 'g',
+            ORC: 'o',
+            TROLL: 'T',
+            DRAGON: 'D',
+            POTION: '!',
+            WEAPON: ')',
+            ARMOR: '[',
+            GOLD: '$'
+        };
+
+        // ==================== CLASSES ====================
+
+        class Entity {
+            constructor(x, y, symbol, name, color = '#0f0') {
+                this.x = x;
+                this.y = y;
+                this.symbol = symbol;
+                this.name = name;
+                this.color = color;
+                this.blocks = true;
+            }
+        }
+
+        class Player extends Entity {
+            constructor(x, y) {
+                super(x, y, ENTITIES.PLAYER, 'Player', '#0ff');
+                this.maxHealth = 100;
+                this.health = 100;
+                this.level = 1;
+                this.xp = 0;
+                this.xpToNext = 100;
+                this.attack = 10;
+                this.defense = 5;
+                this.inventory = [];
+            }
+
+            move(dx, dy, game) {
+                const newX = this.x + dx;
+                const newY = this.y + dy;
+
+                if (!game.map.isWalkable(newX, newY)) {
+                    return false;
+                }
+
+                // Check for entities at new position
+                const entity = game.getEntityAt(newX, newY);
+                if (entity) {
+                    if (entity instanceof Enemy) {
+                        this.attackEnemy(entity, game);
+                        return true; // Turn spent attacking
+                    } else if (entity instanceof Item) {
+                        this.pickupItem(entity, game);
+                        this.x = newX;
+                        this.y = newY;
+                        return true;
+                    }
+                    return false; // Blocked by entity
+                }
+
+                this.x = newX;
+                this.y = newY;
+                return true;
+            }
+
+            attackEnemy(enemy, game) {
+                const damage = Math.max(1, this.attack - enemy.defense);
+                enemy.health -= damage;
+                game.addMessage(`You attack ${enemy.name} for ${damage} damage!`, 'player');
+
+                if (enemy.health <= 0) {
+                    game.addMessage(`You defeated ${enemy.name}!`, 'player');
+                    this.gainXP(enemy.xpValue, game);
+                    game.removeEntity(enemy);
+                } else {
+                    // Enemy counterattacks
+                    enemy.attackPlayer(this, game);
+                }
+            }
+
+            pickupItem(item, game) {
+                this.inventory.push(item);
+                game.removeEntity(item);
+                game.addMessage(`You picked up ${item.name}!`, 'item');
+                game.updateInventory();
+            }
+
+            gainXP(amount, game) {
+                this.xp += amount;
+                if (this.xp >= this.xpToNext) {
+                    this.levelUp(game);
+                }
+                game.updateStats();
+            }
+
+            levelUp(game) {
+                this.level++;
+                this.xp -= this.xpToNext;
+                this.xpToNext = Math.floor(this.xpToNext * 1.5);
+                this.maxHealth += 20;
+                this.health = this.maxHealth;
+                this.attack += 2;
+                this.defense += 1;
+                game.addMessage(`Level up! You are now level ${this.level}!`, 'player');
+            }
+
+            useItem(index, game) {
+                if (index < 0 || index >= this.inventory.length) return;
+
+                const item = this.inventory[index];
+                if (item.type === 'potion') {
+                    this.health = Math.min(this.maxHealth, this.health + item.power);
+                    game.addMessage(`You drink ${item.name} and heal ${item.power} HP!`, 'item');
+                } else if (item.type === 'weapon') {
+                    this.attack += item.power;
+                    game.addMessage(`You equip ${item.name}! Attack +${item.power}`, 'item');
+                } else if (item.type === 'armor') {
+                    this.defense += item.power;
+                    game.addMessage(`You equip ${item.name}! Defense +${item.power}`, 'item');
+                }
+
+                this.inventory.splice(index, 1);
+                game.updateInventory();
+                game.updateStats();
+            }
+        }
+
+        class Enemy extends Entity {
+            constructor(x, y, symbol, name, health, attack, defense, xpValue, color = '#f00') {
+                super(x, y, symbol, name, color);
+                this.maxHealth = health;
+                this.health = health;
+                this.attack = attack;
+                this.defense = defense;
+                this.xpValue = xpValue;
+            }
+
+            attackPlayer(player, game) {
+                const damage = Math.max(1, this.attack - player.defense);
+                player.health -= damage;
+                game.addMessage(`${this.name} attacks you for ${damage} damage!`, 'enemy');
+
+                if (player.health <= 0) {
+                    game.gameOver();
+                }
+            }
+        }
+
+        class Item extends Entity {
+            constructor(x, y, symbol, name, type, power, color = '#ff0') {
+                super(x, y, symbol, name, color);
+                this.type = type;
+                this.power = power;
+                this.blocks = false;
+            }
+        }
+
+        class Map {
+            constructor(width, height) {
+                this.width = width;
+                this.height = height;
+                this.tiles = [];
+                this.generate();
+            }
+
+            generate() {
+                // Simple room generation
+                this.tiles = [];
+                for (let y = 0; y < this.height; y++) {
+                    this.tiles[y] = [];
+                    for (let x = 0; x < this.width; x++) {
+                        if (x === 0 || x === this.width - 1 || y === 0 || y === this.height - 1) {
+                            this.tiles[y][x] = TILES.WALL;
+                        } else {
+                            this.tiles[y][x] = TILES.FLOOR;
+                        }
+                    }
+                }
+
+                // Add some random walls
+                for (let i = 0; i < 50; i++) {
+                    const x = Math.floor(Math.random() * (this.width - 2)) + 1;
+                    const y = Math.floor(Math.random() * (this.height - 2)) + 1;
+                    this.tiles[y][x] = TILES.WALL;
+                }
+
+                // Add stairs down
+                this.tiles[this.height - 2][this.width - 2] = TILES.STAIRS_DOWN;
+            }
+
+            isWalkable(x, y) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+                    return false;
+                }
+                return this.tiles[y][x] !== TILES.WALL;
+            }
+
+            getTile(x, y) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+                    return TILES.WALL;
+                }
+                return this.tiles[y][x];
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.map = new Map(MAP_WIDTH, MAP_HEIGHT);
+                this.player = new Player(5, 5);
+                this.entities = [];
+                this.floor = 1;
+                this.messages = [];
+                this.init();
+            }
+
+            init() {
+                this.generateEntities();
+                this.addMessage('Welcome to the dungeon! Use arrow keys to move.', 'system');
+            }
+
+            generateEntities() {
+                this.entities = [];
+
+                // Generate enemies based on floor
+                const enemyCount = 5 + this.floor * 2;
+                for (let i = 0; i < enemyCount; i++) {
+                    let x, y;
+                    do {
+                        x = Math.floor(Math.random() * (MAP_WIDTH - 2)) + 1;
+                        y = Math.floor(Math.random() * (MAP_HEIGHT - 2)) + 1;
+                    } while (!this.map.isWalkable(x, y) || (x === this.player.x && y === this.player.y));
+
+                    let enemy;
+                    const rand = Math.random();
+                    if (rand < 0.5) {
+                        enemy = new Enemy(x, y, ENTITIES.GOBLIN, 'Goblin', 20 + this.floor * 5, 5 + this.floor, 2, 10 + this.floor * 2);
+                    } else if (rand < 0.8) {
+                        enemy = new Enemy(x, y, ENTITIES.ORC, 'Orc', 35 + this.floor * 7, 8 + this.floor, 3, 20 + this.floor * 3);
+                    } else {
+                        enemy = new Enemy(x, y, ENTITIES.TROLL, 'Troll', 50 + this.floor * 10, 12 + this.floor, 5, 35 + this.floor * 4);
+                    }
+                    this.entities.push(enemy);
+                }
+
+                // Generate items
+                const itemCount = 3 + Math.floor(this.floor / 2);
+                for (let i = 0; i < itemCount; i++) {
+                    let x, y;
+                    do {
+                        x = Math.floor(Math.random() * (MAP_WIDTH - 2)) + 1;
+                        y = Math.floor(Math.random() * (MAP_HEIGHT - 2)) + 1;
+                    } while (!this.map.isWalkable(x, y) || (x === this.player.x && y === this.player.y));
+
+                    let item;
+                    const rand = Math.random();
+                    if (rand < 0.4) {
+                        item = new Item(x, y, ENTITIES.POTION, 'Health Potion', 'potion', 25 + this.floor * 5);
+                    } else if (rand < 0.7) {
+                        item = new Item(x, y, ENTITIES.WEAPON, 'Sword', 'weapon', 3 + this.floor);
+                    } else {
+                        item = new Item(x, y, ENTITIES.ARMOR, 'Armor', 'armor', 2 + this.floor);
+                    }
+                    this.entities.push(item);
+                }
+            }
+
+            getEntityAt(x, y) {
+                for (let entity of this.entities) {
+                    if (entity.x === x && entity.y === y) {
+                        return entity;
+                    }
+                }
+                return null;
+            }
+
+            removeEntity(entity) {
+                const index = this.entities.indexOf(entity);
+                if (index > -1) {
+                    this.entities.splice(index, 1);
+                }
+            }
+
+            nextFloor() {
+                this.floor++;
+                this.map.generate();
+                this.player.x = 5;
+                this.player.y = 5;
+                this.generateEntities();
+                this.addMessage(`Welcome to floor ${this.floor}!`, 'system');
+                this.updateStats();
+            }
+
+            addMessage(text, type = 'system') {
+                this.messages.unshift({ text, type, time: Date.now() });
+                if (this.messages.length > 20) {
+                    this.messages.pop();
+                }
+                this.updateMessages();
+            }
+
+            gameOver() {
+                this.addMessage('GAME OVER! You have been defeated.', 'enemy');
+                // Could add restart functionality here
+            }
+
+            render() {
+                const gameArea = document.getElementById('gameArea');
+                let display = '';
+
+                // Calculate viewport
+                const startX = Math.max(0, Math.min(this.player.x - VIEWPORT_WIDTH / 2, MAP_WIDTH - VIEWPORT_WIDTH));
+                const startY = Math.max(0, Math.min(this.player.y - VIEWPORT_HEIGHT / 2, MAP_HEIGHT - VIEWPORT_HEIGHT));
+
+                for (let y = startY; y < startY + VIEWPORT_HEIGHT; y++) {
+                    for (let x = startX; x < startX + VIEWPORT_WIDTH; x++) {
+                        let char = this.map.getTile(x, y);
+                        let color = '#666';
+
+                        // Check for entities
+                        const entity = this.getEntityAt(x, y);
+                        if (entity) {
+                            char = entity.symbol;
+                            color = entity.color;
+                        }
+
+                        // Player
+                        if (x === this.player.x && y === this.player.y) {
+                            char = this.player.symbol;
+                            color = this.player.color;
+                        }
+
+                        display += `<span style="color: ${color}">${char}</span>`;
+                    }
+                    display += '\n';
+                }
+
+                gameArea.innerHTML = display;
+            }
+
+            updateStats() {
+                document.getElementById('playerLevel').textContent = this.player.level;
+                document.getElementById('playerXP').textContent = `${this.player.xp}/${this.player.xpToNext}`;
+                document.getElementById('playerHealth').textContent = `${this.player.health}/${this.player.maxHealth}`;
+                document.getElementById('healthBar').style.width = `${(this.player.health / this.player.maxHealth) * 100}%`;
+                document.getElementById('playerAttack').textContent = this.player.attack;
+                document.getElementById('playerDefense').textContent = this.player.defense;
+                document.getElementById('currentFloor').textContent = this.floor;
+            }
+
+            updateInventory() {
+                const inventoryList = document.getElementById('inventoryList');
+                inventoryList.innerHTML = '';
+
+                this.player.inventory.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'inventory-item';
+                    div.textContent = `${index + 1}. ${item.name}`;
+                    div.addEventListener('click', () => {
+                        this.player.useItem(index, this);
+                    });
+                    inventoryList.appendChild(div);
+                });
+            }
+
+            updateMessages() {
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.innerHTML = '';
+
+                this.messages.forEach(message => {
+                    const div = document.createElement('div');
+                    div.className = `message ${message.type}`;
+                    div.textContent = message.text;
+                    messagesDiv.appendChild(div);
+                });
+            }
+        }
+
+        // ==================== GAME INSTANCE ====================
+
+        let game = new Game();
+
+        // ==================== INPUT HANDLING ====================
+
+        document.addEventListener('keydown', (e) => {
+            let moved = false;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    moved = game.player.move(0, -1, game);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    moved = game.player.move(0, 1, game);
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    moved = game.player.move(-1, 0, game);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    moved = game.player.move(1, 0, game);
+                    break;
+                case ' ':
+                    // Wait turn
+                    moved = true;
+                    break;
+                case '>':
+                    // Go to next floor
+                    if (game.map.getTile(game.player.x, game.player.y) === TILES.STAIRS_DOWN) {
+                        game.nextFloor();
+                    }
+                    break;
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    const index = parseInt(e.key) - 1;
+                    game.player.useItem(index, game);
+                    break;
+            }
+
+            if (moved) {
+                game.render();
+                game.updateStats();
+            }
+        });
+
+        // New game button
+        document.getElementById('newGameBtn').addEventListener('click', () => {
+            game = new Game();
+            game.render();
+            game.updateStats();
+            game.updateInventory();
+        });
+
+        // Initial render
+        game.render();
+        game.updateStats();
+        game.updateInventory();
+    </script>
+</body>
+</html>
