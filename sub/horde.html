@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Zombie Horde Simulator</title>
+    <title>Zombie Horde Simulator – Re-Targeting</title>
     <style>
         body {
             margin: 0;
@@ -57,11 +57,12 @@
     </style>
 </head>
 <body>
-    <h1>🧟‍♂️ Zombie Horde Simulator 🧟‍♀️</h1>
+    <h1>🧟‍♂️ Zombie Horde Simulator – Re-Targeting 🧟‍♀️</h1>
     <p>Move your mouse = your influence sphere.<br>
-    Hordes stay still until your sphere enters their <strong>sensing circle</strong> → they lock a direction and charge straight (no turning!).<br>
-    If a horde’s <strong>attack circle</strong> touches you → it explodes into individual zombies.<br>
-    Zombies head toward where you were when spawned, but switch to chasing you while you’re inside their personal influence circle.</p>
+    Hordes re-aim toward you **every time** your sphere enters / overlaps their sensing circle again.<br>
+    They still move in straight lines between re-targets (no smooth curving).<br>
+    If a horde’s attack circle touches you → it explodes into individual zombies.<br>
+    Zombies behave the same: head to spawn-time position, but chase while you're in their green circle.</p>
 
     <div class="controls">
         <div class="control">
@@ -86,19 +87,24 @@
     </div>
 
     <canvas id="canvas" width="1000" height="700"></canvas>
-    <div class="info">Red circles = horde sensing (outer) / attack (inner) • Green dots = zombies</div>
+    <div class="info">Orange = sensing • Red = attack • Green = zombie sensing • Hordes now re-target on re-entry!</div>
 
     <script>
+        const ZOMBIE_PERSONAL_RADIUS   = 12;          // slightly bigger visual bodies
+        const REPULSION_STRENGTH       = 1.8;         // much stronger push (was 0.45)
+        const REPULSION_DISTANCE       = ZOMBIE_PERSONAL_RADIUS * 3.5;  // start pushing earlier (~42 px)
+        const MAX_SEPARATION_FORCE     = 2.4;         // cap so they don't fly away too fast
+
         // ====================== PLAYER ======================
         class Player {
             constructor() {
                 this.x = 500;
                 this.y = 350;
-                this.radius = 28;           // ← controlled by slider
+                this.radius = 28;
             }
         }
 
-        // ====================== HORDE (managed by HordeManager) ======================
+        // ====================== HORDE ======================
         class Horde {
             constructor(x, y) {
                 this.x = x;
@@ -108,33 +114,26 @@
                 this.speed = 2.75;
                 this.vx = 0;
                 this.vy = 0;
-                this.triggered = false;
             }
 
-            // Returns true if this horde should explode this frame
             update(player) {
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
                 const dist = Math.hypot(dx, dy);
 
-                // === SENSING LOGIC (one-time direction lock) ===
+                // Re-target every frame that player is in sensing range
                 if (dist < player.radius + this.sensingRadius) {
-                    if (!this.triggered) {
-                        this.triggered = true;
-                        if (dist > 0.1) {
-                            this.vx = (dx / dist) * this.speed;
-                            this.vy = (dy / dist) * this.speed;
-                        }
+                    if (dist > 1) {  // avoid division by zero
+                        this.vx = (dx / dist) * this.speed;
+                        this.vy = (dy / dist) * this.speed;
                     }
                 }
 
-                // === MOVE (straight line only - no following) ===
-                if (this.triggered) {
-                    this.x += this.vx;
-                    this.y += this.vy;
-                }
+                // Always move in current direction (even if no longer sensing)
+                this.x += this.vx;
+                this.y += this.vy;
 
-                // === ATTACK CHECK (after movement) ===
+                // Check attack after movement
                 const distNow = Math.hypot(player.x - this.x, player.y - this.y);
                 return distNow < player.radius + this.attackRadius;
             }
@@ -177,7 +176,6 @@
                     const exploded = this.hordes[i].update(player);
                     if (exploded) {
                         const h = this.hordes[i];
-                        // Spawn zombies at horde position, targeting player's position at explosion
                         for (let j = 0; j < zombiesPerSpawn; j++) {
                             zombies.push(new Zombie(h.x, h.y, player.x, player.y));
                         }
@@ -193,57 +191,104 @@
             }
         }
 
-        // ====================== ZOMBIE ======================
         class Zombie {
             constructor(spawnX, spawnY, targetX, targetY) {
-                this.x = spawnX + (Math.random() - 0.5) * 18;
-                this.y = spawnY + (Math.random() - 0.5) * 18;
+                this.x = spawnX + (Math.random() - 0.5) * 24;
+                this.y = spawnY + (Math.random() - 0.5) * 24;
+                
+                // We keep these for possible future use, but won't use them for movement anymore
                 this.initialTargetX = targetX;
                 this.initialTargetY = targetY;
-                this.influenceRadius = 92;   // ← controlled by slider
+                
+                this.influenceRadius = 92;
                 this.speed = 3.15;
+                this.personalRadius = 10 + Math.random() * 5;
             }
 
-            update(player) {
-                // Decide target: initial spot OR live player if inside influence
-                let tx = this.initialTargetX;
-                let ty = this.initialTargetY;
+            update(player, allZombies) {
+                // ── 1. Check if player is currently in sensing range ───────
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const distToPlayer = Math.hypot(dx, dy);
 
-                const dxp = player.x - this.x;
-                const dyp = player.y - this.y;
-                const distToPlayer = Math.hypot(dxp, dyp);
+                const isTracking = distToPlayer < player.radius + this.influenceRadius;
 
-                if (distToPlayer < player.radius + this.influenceRadius) {
-                    tx = player.x;
-                    ty = player.y;
+                // ── 2. Movement only happens while tracking ─────────────────
+                let moveX = 0;
+                let moveY = 0;
+
+                if (isTracking) {
+                    if (distToPlayer > 2) {  // small deadzone to prevent jitter
+                        moveX = (dx / distToPlayer) * this.speed;
+                        moveY = (dy / distToPlayer) * this.speed;
+                    }
+                    // optional: tiny random wobble while standing still can look more alive
+                    // moveX += (Math.random() - 0.5) * 0.4;
+                    // moveY += (Math.random() - 0.5) * 0.4;
+                }
+                // else → moveX and moveY stay 0 → zombie stops
+
+                // ── 3. Separation from other zombies (keep pushing even when stopped) ──
+                let sepX = 0;
+                let sepY = 0;
+                let count = 0;
+
+                for (let other of allZombies) {
+                    if (other === this) continue;
+
+                    const odx = this.x - other.x;
+                    const ody = this.y - other.y;
+                    const odist = Math.hypot(odx, ody);
+
+                    if (odist < REPULSION_DISTANCE && odist > 0.1) {
+                        const force = REPULSION_STRENGTH * (1 - (odist / REPULSION_DISTANCE) ** 2);
+                        sepX += (odx / odist) * force;
+                        sepY += (ody / odist) * force;
+                        count++;
+                    }
                 }
 
-                // Move toward chosen target
-                const dx = tx - this.x;
-                const dy = ty - this.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist > 1) {
-                    this.x += (dx / dist) * this.speed;
-                    this.y += (dy / dist) * this.speed;
+                if (count > 0) {
+                    sepX /= count;
+                    sepY /= count;
+                    const sepMag = Math.hypot(sepX, sepY);
+                    if (sepMag > MAX_SEPARATION_FORCE) {
+                        sepX = (sepX / sepMag) * MAX_SEPARATION_FORCE;
+                        sepY = (sepY / sepMag) * MAX_SEPARATION_FORCE;
+                    }
                 }
+
+                // ── 4. Apply final movement ─────────────────────────────────
+                this.x += moveX + sepX;
+                this.y += moveY + sepY;
             }
 
             draw(ctx) {
-                // Personal influence circle
-                ctx.strokeStyle = "rgba(120, 255, 200, 0.22)";
-                ctx.lineWidth = 2;
+                // Influence circle – make it more visible when **not** tracking
+                const isTracking = Math.hypot(player.x - this.x, player.y - this.y) < player.radius + this.influenceRadius;
+                
+                ctx.strokeStyle = isTracking 
+                    ? "rgba(120, 255, 200, 0.35)"     // bright when chasing
+                    : "rgba(120, 255, 200, 0.12)";    // faint when stopped
+                ctx.lineWidth = isTracking ? 2.2 : 1.4;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.influenceRadius, 0, Math.PI * 2);
                 ctx.stroke();
 
-                // Zombie body
-                ctx.fillStyle = "#22ff99";
+                // Zombie body – dimmer / grayer when not tracking (optional visual cue)
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = isTracking ? "#22ff99" : "#88ccaa";
+                ctx.fillStyle = isTracking ? "#22ff99" : "#66aa88";
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, 4.8, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, this.personalRadius, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.shadowBlur = 0;
+
+                ctx.strokeStyle = isTracking ? "#0f6644" : "#224433";
+                ctx.lineWidth = 1.8;
+                ctx.stroke();
             }
         }
-
         // ====================== SETUP ======================
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
@@ -287,7 +332,6 @@
         document.getElementById("spawnBtn").addEventListener("click", () => {
             let rx = Math.random() * canvas.width;
             let ry = Math.random() * canvas.height;
-            // Avoid spawning directly on player
             const dx = rx - player.x;
             const dy = ry - player.y;
             if (Math.hypot(dx, dy) < 120) {
@@ -298,44 +342,34 @@
         });
 
         // Mouse control
-        let mouseX = canvas.width / 2;
-        let mouseY = canvas.height / 2;
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
-            mouseX = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
-            mouseY = Math.max(0, Math.min(canvas.height, e.clientY - rect.top));
-            player.x = mouseX;
-            player.y = mouseY;
+            player.x = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
+            player.y = Math.max(0, Math.min(canvas.height, e.clientY - rect.top));
         });
 
         // ====================== ANIMATION LOOP ======================
         function animate() {
-            // Gentle motion blur fade
             ctx.fillStyle = "rgba(8, 8, 28, 0.17)";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Update hordes (may explode and spawn zombies)
             manager.update(player, zombies, zombiesPerSpawn);
 
-            // Update all zombies (using current slider value for influence)
             for (let i = 0; i < zombies.length; i++) {
                 zombies[i].influenceRadius = zombieInfluenceRadius;
-                zombies[i].update(player);
+                zombies[i].update(player, zombies);   // ← add zombies array here
             }
 
-            // Draw everything
             manager.draw(ctx);
             for (let z of zombies) z.draw(ctx);
 
-            // === PLAYER (drawn last) ===
-            // Influence circle
+            // Player
             ctx.strokeStyle = "rgba(80, 220, 255, 0.48)";
             ctx.lineWidth = 6;
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Player core
             ctx.fillStyle = "#44eeff";
             ctx.beginPath();
             ctx.arc(player.x, player.y, 12, 0, Math.PI * 2);
