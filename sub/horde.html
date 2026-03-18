@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zombie Horde Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px 0;
+            background: #0a0a1f;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        h1 { margin: 10px 0 8px; font-size: 2.2em; }
+        p { margin: 8px 0 20px; max-width: 680px; margin-left: auto; margin-right: auto; opacity: 0.85; }
+        .controls {
+            margin: 0 auto 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 18px;
+            background: #111122;
+            padding: 14px 24px;
+            border-radius: 12px;
+            border: 1px solid #334;
+        }
+        .control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+        input[type="range"] { width: 180px; accent-color: #ff3366; }
+        button {
+            padding: 8px 18px;
+            font-size: 1em;
+            background: #ff3366;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background: #ff5588; }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border: 4px solid #222244;
+            box-shadow: 0 0 40px rgba(255, 60, 100, 0.25);
+            background: #05050f;
+        }
+        .info {
+            margin-top: 12px;
+            font-size: 0.95em;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧟‍♂️ Zombie Horde Simulator 🧟‍♀️</h1>
+    <p>Move your mouse = your influence sphere.<br>
+    Hordes stay still until your sphere enters their <strong>sensing circle</strong> → they lock a direction and charge straight (no turning!).<br>
+    If a horde’s <strong>attack circle</strong> touches you → it explodes into individual zombies.<br>
+    Zombies head toward where you were when spawned, but switch to chasing you while you’re inside their personal influence circle.</p>
+
+    <div class="controls">
+        <div class="control">
+            <label for="zombiesCount">Zombies per explosion:</label>
+            <input type="range" id="zombiesCount" min="10" max="120" value="50" step="5">
+            <span id="zombiesValue" style="font-weight:bold; min-width:38px;">50</span>
+        </div>
+
+        <div class="control">
+            <label for="playerRad">Player influence radius:</label>
+            <input type="range" id="playerRad" min="15" max="65" value="28" step="1">
+            <span id="playerValue" style="font-weight:bold; min-width:38px;">28</span>
+        </div>
+
+        <div class="control">
+            <label for="zombieRad">Zombie sensing radius:</label>
+            <input type="range" id="zombieRad" min="40" max="160" value="92" step="2">
+            <span id="zombieValue" style="font-weight:bold; min-width:38px;">92</span>
+        </div>
+
+        <button id="spawnBtn">Spawn New Horde</button>
+    </div>
+
+    <canvas id="canvas" width="1000" height="700"></canvas>
+    <div class="info">Red circles = horde sensing (outer) / attack (inner) • Green dots = zombies</div>
+
+    <script>
+        // ====================== PLAYER ======================
+        class Player {
+            constructor() {
+                this.x = 500;
+                this.y = 350;
+                this.radius = 28;           // ← controlled by slider
+            }
+        }
+
+        // ====================== HORDE (managed by HordeManager) ======================
+        class Horde {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.sensingRadius = 185;
+                this.attackRadius = 52;
+                this.speed = 2.75;
+                this.vx = 0;
+                this.vy = 0;
+                this.triggered = false;
+            }
+
+            // Returns true if this horde should explode this frame
+            update(player) {
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                // === SENSING LOGIC (one-time direction lock) ===
+                if (dist < player.radius + this.sensingRadius) {
+                    if (!this.triggered) {
+                        this.triggered = true;
+                        if (dist > 0.1) {
+                            this.vx = (dx / dist) * this.speed;
+                            this.vy = (dy / dist) * this.speed;
+                        }
+                    }
+                }
+
+                // === MOVE (straight line only - no following) ===
+                if (this.triggered) {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                }
+
+                // === ATTACK CHECK (after movement) ===
+                const distNow = Math.hypot(player.x - this.x, player.y - this.y);
+                return distNow < player.radius + this.attackRadius;
+            }
+
+            draw(ctx) {
+                // Sensing circle (orange)
+                ctx.strokeStyle = "rgba(255, 180, 60, 0.35)";
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.sensingRadius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Attack circle (red)
+                ctx.strokeStyle = "rgba(255, 60, 60, 0.75)";
+                ctx.lineWidth = 4.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.attackRadius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Horde core
+                ctx.fillStyle = "#bb1122";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // ====================== HORDE MANAGER ======================
+        class HordeManager {
+            constructor() {
+                this.hordes = [];
+            }
+
+            add(x, y) {
+                this.hordes.push(new Horde(x, y));
+            }
+
+            update(player, zombies, zombiesPerSpawn) {
+                for (let i = this.hordes.length - 1; i >= 0; i--) {
+                    const exploded = this.hordes[i].update(player);
+                    if (exploded) {
+                        const h = this.hordes[i];
+                        // Spawn zombies at horde position, targeting player's position at explosion
+                        for (let j = 0; j < zombiesPerSpawn; j++) {
+                            zombies.push(new Zombie(h.x, h.y, player.x, player.y));
+                        }
+                        this.hordes.splice(i, 1);
+                    }
+                }
+            }
+
+            draw(ctx) {
+                for (let horde of this.hordes) {
+                    horde.draw(ctx);
+                }
+            }
+        }
+
+        // ====================== ZOMBIE ======================
+        class Zombie {
+            constructor(spawnX, spawnY, targetX, targetY) {
+                this.x = spawnX + (Math.random() - 0.5) * 18;
+                this.y = spawnY + (Math.random() - 0.5) * 18;
+                this.initialTargetX = targetX;
+                this.initialTargetY = targetY;
+                this.influenceRadius = 92;   // ← controlled by slider
+                this.speed = 3.15;
+            }
+
+            update(player) {
+                // Decide target: initial spot OR live player if inside influence
+                let tx = this.initialTargetX;
+                let ty = this.initialTargetY;
+
+                const dxp = player.x - this.x;
+                const dyp = player.y - this.y;
+                const distToPlayer = Math.hypot(dxp, dyp);
+
+                if (distToPlayer < player.radius + this.influenceRadius) {
+                    tx = player.x;
+                    ty = player.y;
+                }
+
+                // Move toward chosen target
+                const dx = tx - this.x;
+                const dy = ty - this.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 1) {
+                    this.x += (dx / dist) * this.speed;
+                    this.y += (dy / dist) * this.speed;
+                }
+            }
+
+            draw(ctx) {
+                // Personal influence circle
+                ctx.strokeStyle = "rgba(120, 255, 200, 0.22)";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.influenceRadius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Zombie body
+                ctx.fillStyle = "#22ff99";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4.8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // ====================== SETUP ======================
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const player = new Player();
+        const manager = new HordeManager();
+        const zombies = [];
+
+        // Initial hordes
+        for (let i = 0; i < 6; i++) {
+            const rx = 80 + Math.random() * (canvas.width - 160);
+            const ry = 80 + Math.random() * (canvas.height - 160);
+            manager.add(rx, ry);
+        }
+
+        // Controls
+        let zombiesPerSpawn = 50;
+        const zombiesSlider = document.getElementById("zombiesCount");
+        const zombiesValue = document.getElementById("zombiesValue");
+        zombiesSlider.addEventListener("input", () => {
+            zombiesPerSpawn = Number(zombiesSlider.value);
+            zombiesValue.textContent = zombiesPerSpawn;
+        });
+
+        const playerSlider = document.getElementById("playerRad");
+        const playerValue = document.getElementById("playerValue");
+        playerSlider.addEventListener("input", () => {
+            player.radius = Number(playerSlider.value);
+            playerValue.textContent = player.radius;
+        });
+
+        const zombieSlider = document.getElementById("zombieRad");
+        const zombieValue = document.getElementById("zombieValue");
+        let zombieInfluenceRadius = 92;
+        zombieSlider.addEventListener("input", () => {
+            zombieInfluenceRadius = Number(zombieSlider.value);
+            zombieValue.textContent = zombieInfluenceRadius;
+        });
+
+        // Spawn button
+        document.getElementById("spawnBtn").addEventListener("click", () => {
+            let rx = Math.random() * canvas.width;
+            let ry = Math.random() * canvas.height;
+            // Avoid spawning directly on player
+            const dx = rx - player.x;
+            const dy = ry - player.y;
+            if (Math.hypot(dx, dy) < 120) {
+                rx = (rx + 300) % canvas.width;
+                ry = (ry + 200) % canvas.height;
+            }
+            manager.add(rx, ry);
+        });
+
+        // Mouse control
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
+            mouseY = Math.max(0, Math.min(canvas.height, e.clientY - rect.top));
+            player.x = mouseX;
+            player.y = mouseY;
+        });
+
+        // ====================== ANIMATION LOOP ======================
+        function animate() {
+            // Gentle motion blur fade
+            ctx.fillStyle = "rgba(8, 8, 28, 0.17)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update hordes (may explode and spawn zombies)
+            manager.update(player, zombies, zombiesPerSpawn);
+
+            // Update all zombies (using current slider value for influence)
+            for (let i = 0; i < zombies.length; i++) {
+                zombies[i].influenceRadius = zombieInfluenceRadius;
+                zombies[i].update(player);
+            }
+
+            // Draw everything
+            manager.draw(ctx);
+            for (let z of zombies) z.draw(ctx);
+
+            // === PLAYER (drawn last) ===
+            // Influence circle
+            ctx.strokeStyle = "rgba(80, 220, 255, 0.48)";
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Player core
+            ctx.fillStyle = "#44eeff";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
