@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Sprite Drawing App</title>
+	<style>
+		:root {
+			--bg: #101722;
+			--panel: #1a2535;
+			--panel-2: #24334a;
+			--text: #e8f1ff;
+			--accent: #57d4ff;
+			--danger: #ff6f6f;
+			--muted: #9fb6d1;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+			background:
+				radial-gradient(circle at 20% 10%, #20334f 0%, transparent 45%),
+				radial-gradient(circle at 80% 90%, #1d2d44 0%, transparent 40%),
+				var(--bg);
+			color: var(--text);
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			padding: 16px;
+		}
+
+		.app {
+			width: min(980px, 100%);
+			background: linear-gradient(165deg, var(--panel), var(--panel-2));
+			border: 1px solid #3a4d6e;
+			border-radius: 16px;
+			padding: 16px;
+			box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+			display: grid;
+			grid-template-columns: 1fr 270px;
+			gap: 16px;
+		}
+
+		.left {
+			display: grid;
+			gap: 12px;
+			justify-items: center;
+		}
+
+		.toolbar,
+		.sizes,
+		.palette {
+			width: 100%;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.toolbar,
+		.sizes {
+			background: rgba(12, 18, 28, 0.35);
+			border: 1px solid #3a4d6e;
+			border-radius: 10px;
+			padding: 8px;
+		}
+
+		button,
+		.file-btn,
+		select {
+			background: #2e4262;
+			color: var(--text);
+			border: 1px solid #4e6791;
+			border-radius: 8px;
+			padding: 8px 10px;
+			cursor: pointer;
+			font-size: 14px;
+			transition: transform 0.1s ease, background 0.15s ease;
+		}
+
+		button:hover,
+		.file-btn:hover {
+			background: #36517b;
+			transform: translateY(-1px);
+		}
+
+		button.active {
+			background: #3a5d90;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 1px var(--accent) inset;
+		}
+
+		button.warn {
+			background: #5f2d37;
+			border-color: #b45567;
+		}
+
+		button.warn:hover {
+			background: #763541;
+		}
+
+		.canvas-wrap {
+			width: min(640px, 80vw);
+			aspect-ratio: 1 / 1;
+			border: 2px solid #5f7597;
+			border-radius: 8px;
+			overflow: hidden;
+			background:
+				linear-gradient(45deg, #1b2535 25%, transparent 25%),
+				linear-gradient(-45deg, #1b2535 25%, transparent 25%),
+				linear-gradient(45deg, transparent 75%, #1b2535 75%),
+				linear-gradient(-45deg, transparent 75%, #1b2535 75%);
+			background-size: 20px 20px;
+			background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%;
+			display: block;
+			image-rendering: pixelated;
+			cursor: crosshair;
+		}
+
+		.right {
+			display: grid;
+			grid-template-rows: auto auto 1fr;
+			gap: 12px;
+			background: rgba(9, 14, 22, 0.35);
+			border: 1px solid #3a4d6e;
+			border-radius: 10px;
+			padding: 10px;
+		}
+
+		.panel-title {
+			margin: 0;
+			color: var(--accent);
+			font-size: 16px;
+			letter-spacing: 0.3px;
+		}
+
+		.palette {
+			justify-content: flex-start;
+			align-content: flex-start;
+		}
+
+		.swatch {
+			width: 100%;
+			display: grid;
+			grid-template-columns: 40px 1fr;
+			align-items: center;
+			gap: 8px;
+			background: rgba(0, 0, 0, 0.15);
+			border: 1px solid #3d5071;
+			border-radius: 8px;
+			padding: 6px;
+		}
+
+		.swatch-btn {
+			width: 40px;
+			height: 34px;
+			padding: 0;
+			font-weight: 700;
+		}
+
+		.swatch-btn.active {
+			outline: 2px solid var(--accent);
+		}
+
+		.swatch input[type="color"] {
+			width: 100%;
+			height: 34px;
+			border: none;
+			background: transparent;
+			cursor: pointer;
+			padding: 0;
+		}
+
+		.hint {
+			color: var(--muted);
+			font-size: 13px;
+			line-height: 1.4;
+			margin: 0;
+		}
+
+		.footer {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		input[type="checkbox"] {
+			transform: translateY(1px);
+		}
+
+		input[type="file"] {
+			display: none;
+		}
+
+		@media (max-width: 900px) {
+			.app {
+				grid-template-columns: 1fr;
+			}
+
+			.canvas-wrap {
+				width: min(640px, 92vw);
+			}
+		}
+	</style>
+</head>
+<body>
+	<main class="app">
+		<section class="left">
+			<div class="sizes" id="sizeButtons">
+				<strong>Canvas Size:</strong>
+			</div>
+
+			<div class="toolbar">
+				<button id="saveBtn" type="button">Save PNG</button>
+				<label class="file-btn" for="loadInput">Load Image</label>
+				<input id="loadInput" type="file" accept="image/*" />
+				<button class="warn" id="clearBtn" type="button">Clear</button>
+			</div>
+
+			<div class="canvas-wrap">
+				<canvas id="spriteCanvas" width="640" height="640" aria-label="Sprite drawing canvas"></canvas>
+			</div>
+
+			<div class="footer">
+				<label><input type="checkbox" id="gridToggle" checked /> Show Grid</label>
+				<span id="statusText">Size: 16x16 | Active Color: 1</span>
+			</div>
+		</section>
+
+		<aside class="right">
+			<h2 class="panel-title">Color Bar (Keys 1-0)</h2>
+			<p class="hint">Click a number button or press the same number on your keyboard to select a drawing color. Left mouse draws, right mouse erases.</p>
+			<div class="palette" id="palette"></div>
+		</aside>
+	</main>
+
+	<script>
+		const canvas = document.getElementById("spriteCanvas");
+		const ctx = canvas.getContext("2d");
+
+		const paletteContainer = document.getElementById("palette");
+		const sizeButtonsContainer = document.getElementById("sizeButtons");
+		const saveBtn = document.getElementById("saveBtn");
+		const loadInput = document.getElementById("loadInput");
+		const clearBtn = document.getElementById("clearBtn");
+		const gridToggle = document.getElementById("gridToggle");
+		const statusText = document.getElementById("statusText");
+
+		const sizes = [16, 32, 64];
+		let gridSize = 16;
+		let cells = createBlankCells(gridSize);
+		let drawing = false;
+		let activeIndex = 0;
+
+		const palette = [
+			"#111111",
+			"#ffffff",
+			"#ff3b30",
+			"#ff9500",
+			"#ffcc00",
+			"#34c759",
+			"#00c7be",
+			"#0a84ff",
+			"#5e5ce6",
+			"#ff2d55"
+		];
+
+		function createBlankCells(size) {
+			return Array(size * size).fill("");
+		}
+
+		function indexAt(x, y) {
+			return y * gridSize + x;
+		}
+
+		function setCell(x, y, color) {
+			if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) {
+				return;
+			}
+			cells[indexAt(x, y)] = color;
+		}
+
+		function getCell(x, y) {
+			return cells[indexAt(x, y)];
+		}
+
+		function drawCanvas() {
+			const pixel = canvas.width / gridSize;
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			for (let y = 0; y < gridSize; y += 1) {
+				for (let x = 0; x < gridSize; x += 1) {
+					const color = getCell(x, y);
+					if (!color) {
+						continue;
+					}
+					ctx.fillStyle = color;
+					ctx.fillRect(x * pixel, y * pixel, pixel, pixel);
+				}
+			}
+
+			if (gridToggle.checked) {
+				ctx.strokeStyle = "rgba(180, 215, 255, 0.23)";
+				ctx.lineWidth = 1;
+				for (let i = 0; i <= gridSize; i += 1) {
+					const p = Math.round(i * pixel) + 0.5;
+					ctx.beginPath();
+					ctx.moveTo(p, 0);
+					ctx.lineTo(p, canvas.height);
+					ctx.stroke();
+
+					ctx.beginPath();
+					ctx.moveTo(0, p);
+					ctx.lineTo(canvas.width, p);
+					ctx.stroke();
+				}
+			}
+		}
+
+		function updateStatus() {
+			statusText.textContent = `Size: ${gridSize}x${gridSize} | Active Color: ${activeIndex + 1}`;
+		}
+
+		function applyPointer(e, erase = false) {
+			const rect = canvas.getBoundingClientRect();
+			const px = (e.clientX - rect.left) / rect.width;
+			const py = (e.clientY - rect.top) / rect.height;
+			const x = Math.floor(px * gridSize);
+			const y = Math.floor(py * gridSize);
+
+			setCell(x, y, erase ? "" : palette[activeIndex]);
+			drawCanvas();
+		}
+
+		function exportToTempCanvas(size) {
+			const out = document.createElement("canvas");
+			out.width = size;
+			out.height = size;
+			const outCtx = out.getContext("2d");
+			outCtx.clearRect(0, 0, size, size);
+
+			for (let y = 0; y < gridSize; y += 1) {
+				for (let x = 0; x < gridSize; x += 1) {
+					const color = getCell(x, y);
+					if (!color) {
+						continue;
+					}
+					const tx = Math.floor((x / gridSize) * size);
+					const ty = Math.floor((y / gridSize) * size);
+					const tw = Math.ceil(size / gridSize);
+					const th = Math.ceil(size / gridSize);
+					outCtx.fillStyle = color;
+					outCtx.fillRect(tx, ty, tw, th);
+				}
+			}
+
+			return out;
+		}
+
+		function resampleCells(oldSize, oldCells, newSize) {
+			const oldCanvas = document.createElement("canvas");
+			oldCanvas.width = oldSize;
+			oldCanvas.height = oldSize;
+			const oldCtx = oldCanvas.getContext("2d");
+
+			for (let y = 0; y < oldSize; y += 1) {
+				for (let x = 0; x < oldSize; x += 1) {
+					const color = oldCells[y * oldSize + x];
+					if (!color) {
+						continue;
+					}
+					oldCtx.fillStyle = color;
+					oldCtx.fillRect(x, y, 1, 1);
+				}
+			}
+
+			const newCanvas = document.createElement("canvas");
+			newCanvas.width = newSize;
+			newCanvas.height = newSize;
+			const newCtx = newCanvas.getContext("2d");
+			newCtx.imageSmoothingEnabled = false;
+			newCtx.drawImage(oldCanvas, 0, 0, newSize, newSize);
+
+			const pixels = newCtx.getImageData(0, 0, newSize, newSize).data;
+			const next = createBlankCells(newSize);
+
+			for (let y = 0; y < newSize; y += 1) {
+				for (let x = 0; x < newSize; x += 1) {
+					const i = (y * newSize + x) * 4;
+					const a = pixels[i + 3];
+					if (a < 20) {
+						continue;
+					}
+					const r = pixels[i].toString(16).padStart(2, "0");
+					const g = pixels[i + 1].toString(16).padStart(2, "0");
+					const b = pixels[i + 2].toString(16).padStart(2, "0");
+					next[y * newSize + x] = `#${r}${g}${b}`;
+				}
+			}
+
+			return next;
+		}
+
+		function setGridSize(size) {
+			if (size === gridSize) {
+				return;
+			}
+			const oldSize = gridSize;
+			const oldCells = cells.slice();
+			gridSize = size;
+			cells = resampleCells(oldSize, oldCells, size);
+			updateSizeButtons();
+			updateStatus();
+			drawCanvas();
+		}
+
+		function setActiveColor(index) {
+			activeIndex = index;
+			updatePaletteButtons();
+			updateStatus();
+		}
+
+		function updatePaletteButtons() {
+			const buttons = paletteContainer.querySelectorAll(".swatch-btn");
+			buttons.forEach((btn, i) => {
+				btn.classList.toggle("active", i === activeIndex);
+			});
+		}
+
+		function updateSizeButtons() {
+			const sizeButtons = sizeButtonsContainer.querySelectorAll("button[data-size]");
+			sizeButtons.forEach((btn) => {
+				const val = Number(btn.dataset.size);
+				btn.classList.toggle("active", val === gridSize);
+			});
+		}
+
+		function buildUI() {
+			sizes.forEach((size) => {
+				const b = document.createElement("button");
+				b.type = "button";
+				b.dataset.size = String(size);
+				b.textContent = `${size}x${size}`;
+				b.addEventListener("click", () => setGridSize(size));
+				sizeButtonsContainer.appendChild(b);
+			});
+
+			palette.forEach((hex, index) => {
+				const wrap = document.createElement("div");
+				wrap.className = "swatch";
+
+				const keyNumber = index + 1;
+				const label = keyNumber === 10 ? "0" : String(keyNumber);
+
+				const swatchBtn = document.createElement("button");
+				swatchBtn.type = "button";
+				swatchBtn.className = "swatch-btn";
+				swatchBtn.textContent = label;
+				swatchBtn.title = `Press ${label}`;
+				swatchBtn.addEventListener("click", () => setActiveColor(index));
+
+				const input = document.createElement("input");
+				input.type = "color";
+				input.value = hex;
+				input.setAttribute("aria-label", `Color slot ${label}`);
+				input.addEventListener("input", () => {
+					palette[index] = input.value;
+					if (index === activeIndex) {
+						updateStatus();
+					}
+				});
+
+				wrap.appendChild(swatchBtn);
+				wrap.appendChild(input);
+				paletteContainer.appendChild(wrap);
+			});
+
+			updateSizeButtons();
+			updatePaletteButtons();
+			updateStatus();
+		}
+
+		function saveImage() {
+			const out = exportToTempCanvas(gridSize);
+			const link = document.createElement("a");
+			link.href = out.toDataURL("image/png");
+			link.download = `sprite-${gridSize}x${gridSize}.png`;
+			link.click();
+		}
+
+		function loadImage(file) {
+			const img = new Image();
+			img.onload = () => {
+				const tmp = document.createElement("canvas");
+				tmp.width = gridSize;
+				tmp.height = gridSize;
+				const tctx = tmp.getContext("2d");
+				tctx.imageSmoothingEnabled = false;
+				tctx.clearRect(0, 0, gridSize, gridSize);
+				tctx.drawImage(img, 0, 0, gridSize, gridSize);
+
+				const data = tctx.getImageData(0, 0, gridSize, gridSize).data;
+				cells = createBlankCells(gridSize);
+				for (let y = 0; y < gridSize; y += 1) {
+					for (let x = 0; x < gridSize; x += 1) {
+						const i = (y * gridSize + x) * 4;
+						if (data[i + 3] < 20) {
+							continue;
+						}
+						const r = data[i].toString(16).padStart(2, "0");
+						const g = data[i + 1].toString(16).padStart(2, "0");
+						const b = data[i + 2].toString(16).padStart(2, "0");
+						cells[indexAt(x, y)] = `#${r}${g}${b}`;
+					}
+				}
+				drawCanvas();
+			};
+			img.src = URL.createObjectURL(file);
+		}
+
+		canvas.addEventListener("mousedown", (e) => {
+			drawing = true;
+			applyPointer(e, e.button === 2);
+		});
+
+		canvas.addEventListener("mousemove", (e) => {
+			if (!drawing) {
+				return;
+			}
+			applyPointer(e, e.buttons === 2);
+		});
+
+		window.addEventListener("mouseup", () => {
+			drawing = false;
+		});
+
+		canvas.addEventListener("contextmenu", (e) => {
+			e.preventDefault();
+		});
+
+		window.addEventListener("keydown", (e) => {
+			if (/^[1-9]$/.test(e.key)) {
+				setActiveColor(Number(e.key) - 1);
+			} else if (e.key === "0") {
+				setActiveColor(9);
+			}
+		});
+
+		saveBtn.addEventListener("click", saveImage);
+		clearBtn.addEventListener("click", () => {
+			cells = createBlankCells(gridSize);
+			drawCanvas();
+		});
+
+		loadInput.addEventListener("change", () => {
+			const file = loadInput.files && loadInput.files[0];
+			if (!file) {
+				return;
+			}
+			loadImage(file);
+			loadInput.value = "";
+		});
+
+		gridToggle.addEventListener("change", drawCanvas);
+
+		buildUI();
+		drawCanvas();
+	</script>
+</body>
+</html>
