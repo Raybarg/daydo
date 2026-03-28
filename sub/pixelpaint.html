@@ -225,6 +225,8 @@
 			</div>
 
 			<div class="toolbar">
+				<button id="undoBtn" type="button">Undo</button>
+				<button id="redoBtn" type="button">Redo</button>
 				<button id="saveBtn" type="button">Save PNG</button>
 				<label class="file-btn" for="loadInput">Load Image</label>
 				<input id="loadInput" type="file" accept="image/*" />
@@ -254,6 +256,8 @@
 
 		const paletteContainer = document.getElementById("palette");
 		const sizeButtonsContainer = document.getElementById("sizeButtons");
+		const undoBtn = document.getElementById("undoBtn");
+		const redoBtn = document.getElementById("redoBtn");
 		const saveBtn = document.getElementById("saveBtn");
 		const loadInput = document.getElementById("loadInput");
 		const clearBtn = document.getElementById("clearBtn");
@@ -264,7 +268,12 @@
 		let gridSize = 16;
 		let cells = createBlankCells(gridSize);
 		let drawing = false;
+		let strokeChanged = false;
 		let activeIndex = 0;
+		let pickerHeld = false;
+		let undoStack = [];
+		let redoStack = [];
+		const maxHistory = 100;
 
 		const palette = [
 			"#111111",
@@ -285,6 +294,15 @@
 
 		function indexAt(x, y) {
 			return y * gridSize + x;
+		}
+
+		function getGridCoordsFromEvent(e) {
+			const rect = canvas.getBoundingClientRect();
+			const px = (e.clientX - rect.left) / rect.width;
+			const py = (e.clientY - rect.top) / rect.height;
+			const x = Math.floor(px * gridSize);
+			const y = Math.floor(py * gridSize);
+			return { x, y };
 		}
 
 		function setCell(x, y, color) {
@@ -314,8 +332,8 @@
 			}
 
 			if (gridToggle.checked) {
-				ctx.strokeStyle = "rgba(180, 215, 255, 0.23)";
-				ctx.lineWidth = 1;
+				ctx.strokeStyle = "rgba(180, 215, 255, 0.25)";
+				ctx.lineWidth = 2;
 				for (let i = 0; i <= gridSize; i += 1) {
 					const p = Math.round(i * pixel) + 0.5;
 					ctx.beginPath();
@@ -332,17 +350,91 @@
 		}
 
 		function updateStatus() {
-			statusText.textContent = `Size: ${gridSize}x${gridSize} | Active Color: ${activeIndex + 1}`;
+			const mode = pickerHeld ? " | Mode: Picker (Space)" : "";
+			statusText.textContent = `Size: ${gridSize}x${gridSize} | Active Color: ${activeIndex + 1}${mode}`;
+		}
+
+		function cloneState() {
+			return {
+				gridSize,
+				cells: cells.slice()
+			};
+		}
+
+		function updateHistoryButtons() {
+			undoBtn.disabled = undoStack.length === 0;
+			redoBtn.disabled = redoStack.length === 0;
+		}
+
+		function pushHistory() {
+			undoStack.push(cloneState());
+			if (undoStack.length > maxHistory) {
+				undoStack.shift();
+			}
+			redoStack = [];
+			updateHistoryButtons();
+		}
+
+		function restoreState(state) {
+			gridSize = state.gridSize;
+			cells = state.cells.slice();
+			updateSizeButtons();
+			updateStatus();
+			drawCanvas();
+		}
+
+		function undo() {
+			if (undoStack.length === 0) {
+				return;
+			}
+			redoStack.push(cloneState());
+			const prev = undoStack.pop();
+			restoreState(prev);
+			updateHistoryButtons();
+		}
+
+		function redo() {
+			if (redoStack.length === 0) {
+				return;
+			}
+			undoStack.push(cloneState());
+			const next = redoStack.pop();
+			restoreState(next);
+			updateHistoryButtons();
+		}
+
+		function syncActiveColorInput() {
+			const colorInputs = paletteContainer.querySelectorAll('input[type="color"]');
+			const input = colorInputs[activeIndex];
+			if (input) {
+				input.value = palette[activeIndex];
+			}
+		}
+
+		function pickColorFromPointer(e) {
+			const { x, y } = getGridCoordsFromEvent(e);
+			if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) {
+				return;
+			}
+			const sampled = getCell(x, y);
+			if (!sampled) {
+				return;
+			}
+			palette[activeIndex] = sampled;
+			syncActiveColorInput();
+			updateStatus();
 		}
 
 		function applyPointer(e, erase = false) {
-			const rect = canvas.getBoundingClientRect();
-			const px = (e.clientX - rect.left) / rect.width;
-			const py = (e.clientY - rect.top) / rect.height;
-			const x = Math.floor(px * gridSize);
-			const y = Math.floor(py * gridSize);
+			const { x, y } = getGridCoordsFromEvent(e);
+			const before = getCell(x, y);
+			const after = erase ? "" : palette[activeIndex];
+			if (before === after) {
+				return;
+			}
 
-			setCell(x, y, erase ? "" : palette[activeIndex]);
+			setCell(x, y, after);
+			strokeChanged = true;
 			drawCanvas();
 		}
 
@@ -419,6 +511,7 @@
 			if (size === gridSize) {
 				return;
 			}
+			pushHistory();
 			const oldSize = gridSize;
 			const oldCells = cells.slice();
 			gridSize = size;
@@ -492,6 +585,7 @@
 			updateSizeButtons();
 			updatePaletteButtons();
 			updateStatus();
+			updateHistoryButtons();
 		}
 
 		function saveImage() {
@@ -505,6 +599,7 @@
 		function loadImage(file) {
 			const img = new Image();
 			img.onload = () => {
+				pushHistory();
 				const tmp = document.createElement("canvas");
 				tmp.width = gridSize;
 				tmp.height = gridSize;
@@ -533,6 +628,15 @@
 		}
 
 		canvas.addEventListener("mousedown", (e) => {
+			if (pickerHeld) {
+				pickColorFromPointer(e);
+				return;
+			}
+			if (e.button !== 0 && e.button !== 2) {
+				return;
+			}
+			pushHistory();
+			strokeChanged = false;
 			drawing = true;
 			applyPointer(e, e.button === 2);
 		});
@@ -545,7 +649,12 @@
 		});
 
 		window.addEventListener("mouseup", () => {
+			if (drawing && !strokeChanged && undoStack.length > 0) {
+				undoStack.pop();
+				updateHistoryButtons();
+			}
 			drawing = false;
+			strokeChanged = false;
 		});
 
 		canvas.addEventListener("contextmenu", (e) => {
@@ -553,6 +662,30 @@
 		});
 
 		window.addEventListener("keydown", (e) => {
+			if (e.code === "Space") {
+				e.preventDefault();
+				pickerHeld = true;
+				canvas.style.cursor = "copy";
+				updateStatus();
+				return;
+			}
+
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+				e.preventDefault();
+				if (e.shiftKey) {
+					redo();
+				} else {
+					undo();
+				}
+				return;
+			}
+
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+				e.preventDefault();
+				redo();
+				return;
+			}
+
 			if (/^[1-9]$/.test(e.key)) {
 				setActiveColor(Number(e.key) - 1);
 			} else if (e.key === "0") {
@@ -560,8 +693,19 @@
 			}
 		});
 
+		window.addEventListener("keyup", (e) => {
+			if (e.code === "Space") {
+				pickerHeld = false;
+				canvas.style.cursor = "crosshair";
+				updateStatus();
+			}
+		});
+
+		undoBtn.addEventListener("click", undo);
+		redoBtn.addEventListener("click", redo);
 		saveBtn.addEventListener("click", saveImage);
 		clearBtn.addEventListener("click", () => {
+			pushHistory();
 			cells = createBlankCells(gridSize);
 			drawCanvas();
 		});
