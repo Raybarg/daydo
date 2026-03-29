@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Color Counter</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 30px 16px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 24px;
+      color: #a78bfa;
+      letter-spacing: 1px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    label.file-btn {
+      background: #7c3aed;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    label.file-btn:hover { background: #6d28d9; }
+
+    input[type="file"] { display: none; }
+
+    button#analyzeBtn {
+      background: #059669;
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button#analyzeBtn:hover { background: #047857; }
+    button#analyzeBtn:disabled { background: #374151; cursor: not-allowed; }
+
+    .result-box {
+      background: #16213e;
+      border: 1px solid #4c1d95;
+      border-radius: 10px;
+      padding: 18px 32px;
+      margin-bottom: 24px;
+      text-align: center;
+      min-width: 260px;
+    }
+
+    .result-box .label {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+
+    .result-box .count {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #a78bfa;
+    }
+
+    .file-name {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+
+    .progress-wrap {
+      width: 100%;
+      max-width: 600px;
+      height: 6px;
+      background: #374151;
+      border-radius: 3px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #a78bfa;
+      border-radius: 3px;
+      transition: width 0.1s;
+    }
+
+    canvas {
+      max-width: 100%;
+      border-radius: 10px;
+      border: 1px solid #4c1d95;
+      display: none;
+    }
+
+    .drop-zone {
+      width: 100%;
+      max-width: 600px;
+      border: 2px dashed #4c1d95;
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      color: #6b7280;
+      margin-bottom: 20px;
+      transition: border-color 0.2s, color 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone.over {
+      border-color: #a78bfa;
+      color: #a78bfa;
+    }
+    .drop-zone span { font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Color Counter</h1>
+
+  <div class="controls">
+    <label class="file-btn" for="fileInput">Choose Image</label>
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="analyzeBtn" disabled>Count Colors</button>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <span>or drag &amp; drop an image here</span>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <div class="result-box" id="resultBox" style="display:none">
+    <div class="label">Unique Colors</div>
+    <div class="count" id="colorCount">—</div>
+    <div class="file-name" id="fileName"></div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const fileInput   = document.getElementById('fileInput');
+    const analyzeBtn  = document.getElementById('analyzeBtn');
+    const canvas      = document.getElementById('canvas');
+    const ctx         = canvas.getContext('2d', { willReadFrequently: true });
+    const colorCount  = document.getElementById('colorCount');
+    const resultBox   = document.getElementById('resultBox');
+    const fileNameEl  = document.getElementById('fileName');
+    const dropZone    = document.getElementById('dropZone');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressBar  = document.getElementById('progressBar');
+
+    let loadedImage = null;
+    let loadedFileName = '';
+
+    function loadImageFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      loadedFileName = file.name;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          canvas.width  = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          ctx.drawImage(img, 0, 0);
+          canvas.style.display = 'block';
+          dropZone.style.display = 'none';
+          loadedImage = img;
+          analyzeBtn.disabled = false;
+          resultBox.style.display = 'none';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    fileInput.addEventListener('change', () => {
+      loadImageFile(fileInput.files[0]);
+    });
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      loadImageFile(file);
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    analyzeBtn.addEventListener('click', () => {
+      if (!loadedImage) return;
+      countColors();
+    });
+
+    function countColors() {
+      analyzeBtn.disabled = true;
+      progressWrap.style.display = 'block';
+      progressBar.style.width = '0%';
+
+      // Use setTimeout to let the UI update before heavy work
+      setTimeout(() => {
+        const w = canvas.width;
+        const h = canvas.height;
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const total = w * h;
+        const colors = new Set();
+
+        const CHUNK = 50000;
+        let offset = 0;
+
+        function processChunk() {
+          const end = Math.min(offset + CHUNK, total);
+          for (let i = offset; i < end; i++) {
+            const idx = i * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+            // Pack into a single 32-bit key: 0xAARRGGBB
+            colors.add((a << 24 | r << 16 | g << 8 | b) >>> 0);
+          }
+          offset = end;
+          const pct = Math.round((offset / total) * 100);
+          progressBar.style.width = pct + '%';
+
+          if (offset < total) {
+            setTimeout(processChunk, 0);
+          } else {
+            progressWrap.style.display = 'none';
+            colorCount.textContent = colors.size.toLocaleString();
+            fileNameEl.textContent = loadedFileName;
+            resultBox.style.display = 'block';
+            analyzeBtn.disabled = false;
+          }
+        }
+
+        processChunk();
+      }, 20);
+    }
+  </script>
+</body>
+</html>
