@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Product Registry</title>
+	<style>
+		:root {
+			--bg: #f3efe4;
+			--panel: rgba(255, 251, 243, 0.92);
+			--panel-strong: #fff9ee;
+			--line: #d4c4a8;
+			--text: #2f2419;
+			--muted: #6f6255;
+			--accent: #b45f2f;
+			--accent-strong: #8d4319;
+			--accent-soft: #f1d7bc;
+			--good: #2f7d4d;
+			--danger: #9f2f2f;
+			--shadow: 0 18px 45px rgba(68, 39, 14, 0.16);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+			color: var(--text);
+			background:
+				radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 32%),
+				linear-gradient(145deg, #f7f0df 0%, #ead9be 48%, #d8c1a0 100%);
+			padding: 24px;
+		}
+
+		.app-shell {
+			max-width: 1440px;
+			margin: 0 auto;
+			display: grid;
+			gap: 18px;
+		}
+
+		.hero {
+			display: flex;
+			justify-content: space-between;
+			align-items: end;
+			gap: 16px;
+			padding: 24px 28px;
+			background: linear-gradient(135deg, rgba(255, 249, 238, 0.96), rgba(245, 226, 193, 0.9));
+			border: 1px solid rgba(141, 67, 25, 0.16);
+			border-radius: 24px;
+			box-shadow: var(--shadow);
+		}
+
+		.hero h1 {
+			margin: 0;
+			font-size: clamp(2rem, 4vw, 3.3rem);
+			line-height: 1;
+			letter-spacing: 0.04em;
+		}
+
+		.hero p {
+			margin: 10px 0 0;
+			max-width: 720px;
+			color: var(--muted);
+		}
+
+		.status {
+			min-width: 220px;
+			padding: 14px 16px;
+			border-radius: 18px;
+			background: rgba(255, 255, 255, 0.65);
+			border: 1px solid rgba(141, 67, 25, 0.18);
+			font-size: 0.95rem;
+		}
+
+		.status strong {
+			display: block;
+			margin-bottom: 6px;
+			color: var(--accent-strong);
+		}
+
+		.workspace {
+			display: grid;
+			grid-template-columns: 320px minmax(360px, 1fr) 340px;
+			gap: 18px;
+		}
+
+		.panel {
+			background: var(--panel);
+			border: 1px solid rgba(141, 67, 25, 0.18);
+			border-radius: 24px;
+			box-shadow: var(--shadow);
+			overflow: hidden;
+		}
+
+		.panel-header {
+			padding: 18px 20px 12px;
+			border-bottom: 1px solid rgba(141, 67, 25, 0.12);
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 249, 238, 0));
+		}
+
+		.panel-header h2,
+		.panel-header h3 {
+			margin: 0;
+			font-size: 1.1rem;
+		}
+
+		.panel-header p {
+			margin: 8px 0 0;
+			color: var(--muted);
+			font-size: 0.93rem;
+		}
+
+		.panel-body {
+			padding: 18px 20px 20px;
+		}
+
+		.stack {
+			display: grid;
+			gap: 14px;
+		}
+
+		.toolbar {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+		}
+
+		button,
+		.file-button {
+			border: 0;
+			border-radius: 12px;
+			padding: 10px 14px;
+			font: inherit;
+			cursor: pointer;
+			color: #fffaf4;
+			background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+			transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+			box-shadow: 0 10px 20px rgba(141, 67, 25, 0.18);
+		}
+
+		button:hover,
+		.file-button:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 12px 22px rgba(141, 67, 25, 0.24);
+		}
+
+		button.secondary,
+		.file-button.secondary {
+			color: var(--text);
+			background: linear-gradient(135deg, #f3e4cd, #ead0a9);
+		}
+
+		button.danger {
+			background: linear-gradient(135deg, #b44545, #882929);
+		}
+
+		button:disabled {
+			opacity: 0.55;
+			cursor: not-allowed;
+			transform: none;
+			box-shadow: none;
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 11px 12px;
+			font: inherit;
+			color: var(--text);
+			background: rgba(255, 255, 255, 0.82);
+		}
+
+		textarea {
+			min-height: 144px;
+			resize: vertical;
+		}
+
+		input:focus,
+		textarea:focus,
+		select:focus {
+			outline: 2px solid rgba(180, 95, 47, 0.24);
+			border-color: var(--accent);
+		}
+
+		.quick-add {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			gap: 10px;
+		}
+
+		.list-box {
+			display: grid;
+			gap: 8px;
+			max-height: 300px;
+			overflow: auto;
+			padding-right: 4px;
+		}
+
+		.list-item {
+			width: 100%;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 8px;
+			border: 1px solid rgba(141, 67, 25, 0.12);
+			background: var(--panel-strong);
+			color: var(--text);
+			text-align: left;
+			box-shadow: none;
+		}
+
+		.list-item.active {
+			background: linear-gradient(135deg, #f0cda6, #e2b27d);
+			border-color: rgba(141, 67, 25, 0.3);
+		}
+
+		.list-item small {
+			color: var(--muted);
+		}
+
+		.editor-grid {
+			display: grid;
+			gap: 14px;
+		}
+
+		.field {
+			display: grid;
+			gap: 8px;
+		}
+
+		.field label {
+			font-size: 0.92rem;
+			font-weight: 600;
+			color: var(--muted);
+		}
+
+		.property-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+			gap: 10px;
+		}
+
+		.check-pill {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 12px 14px;
+			border: 1px solid rgba(141, 67, 25, 0.14);
+			border-radius: 16px;
+			background: rgba(255, 251, 244, 0.94);
+		}
+
+		.check-pill input {
+			width: auto;
+			margin: 0;
+			accent-color: var(--accent);
+		}
+
+		.relation-list {
+			display: grid;
+			gap: 10px;
+			max-height: 270px;
+			overflow: auto;
+			padding-right: 4px;
+		}
+
+		.relation-card {
+			border: 1px solid rgba(141, 67, 25, 0.14);
+			border-radius: 18px;
+			padding: 14px;
+			background: rgba(255, 250, 242, 0.96);
+		}
+
+		.relation-card strong {
+			display: block;
+			margin-bottom: 8px;
+		}
+
+		.tag-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+
+		.tag {
+			display: inline-flex;
+			align-items: center;
+			min-height: 28px;
+			padding: 4px 10px;
+			border-radius: 999px;
+			background: var(--accent-soft);
+			color: var(--accent-strong);
+			font-size: 0.9rem;
+		}
+
+		.tag.empty {
+			background: rgba(111, 98, 85, 0.12);
+			color: var(--muted);
+		}
+
+		.meta-grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 14px;
+		}
+
+		.hint {
+			margin: 0;
+			color: var(--muted);
+			font-size: 0.9rem;
+		}
+
+		.hidden {
+			display: none;
+		}
+
+		@media (max-width: 1120px) {
+			.workspace {
+				grid-template-columns: 1fr;
+			}
+
+			.hero {
+				align-items: start;
+				flex-direction: column;
+			}
+		}
+
+		@media (max-width: 640px) {
+			body {
+				padding: 14px;
+			}
+
+			.panel-body,
+			.panel-header,
+			.hero {
+				padding-left: 16px;
+				padding-right: 16px;
+			}
+
+			.meta-grid,
+			.quick-add {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="app-shell">
+		<section class="hero">
+			<div>
+				<h1>Product Registry</h1>
+				<p>Manage products, reusable properties, and the one-to-many links between them in one page. Select an item to edit it, toggle its properties, then export or import the full registry as JSON.</p>
+			</div>
+			<div class="status" id="statusBox">
+				<strong>Ready</strong>
+				<span id="statusText">Loaded starter products and property types.</span>
+			</div>
+		</section>
+
+		<section class="workspace">
+			<aside class="panel">
+				<div class="panel-header">
+					<h2>Products</h2>
+					<p>Select, add, or remove items from the registry.</p>
+				</div>
+				<div class="panel-body stack">
+					<div class="quick-add">
+						<input id="newProductName" type="text" placeholder="New product name">
+						<button id="addProductBtn" type="button">Add product</button>
+					</div>
+					<div class="toolbar">
+						<button id="removeProductBtn" class="danger" type="button">Remove selected</button>
+					</div>
+					<div id="productList" class="list-box"></div>
+				</div>
+			</aside>
+
+			<main class="panel">
+				<div class="panel-header">
+					<h2>Item Editor</h2>
+					<p>The selected product appears here. Update fields and click property checkboxes to change its relations.</p>
+				</div>
+				<div class="panel-body stack">
+					<div id="emptyEditorState" class="hint hidden">Select a product to edit it.</div>
+
+					<div id="productEditor" class="editor-grid">
+						<div class="meta-grid">
+							<div class="field">
+								<label for="productName">Product name</label>
+								<input id="productName" type="text" placeholder="Product name">
+							</div>
+							<div class="field">
+								<label for="productCode">Code</label>
+								<input id="productCode" type="text" placeholder="Optional code">
+							</div>
+						</div>
+
+						<div class="field">
+							<label for="productDescription">Description</label>
+							<textarea id="productDescription" placeholder="Describe the item"></textarea>
+						</div>
+
+						<div class="field">
+							<label>Properties</label>
+							<div id="propertyCheckboxes" class="property-grid"></div>
+						</div>
+
+						<div class="field">
+							<label>Selected product relation preview</label>
+							<div id="selectedProductTags" class="tag-row"></div>
+						</div>
+					</div>
+
+					<div class="panel" style="border-radius: 20px; box-shadow: none;">
+						<div class="panel-header">
+							<h3>Import / Export JSON</h3>
+							<p>Export the current registry, or import a full replacement dataset.</p>
+						</div>
+						<div class="panel-body stack">
+							<div class="toolbar">
+								<button id="exportBtn" type="button">Export to text</button>
+								<button id="downloadBtn" class="secondary" type="button">Download JSON</button>
+								<label for="importFileInput" class="file-button secondary">Import file</label>
+								<button id="importBtn" type="button">Import from text</button>
+							</div>
+							<input id="importFileInput" class="hidden" type="file" accept="application/json,.json">
+							<textarea id="jsonArea" spellcheck="false" placeholder="Exported JSON appears here. You can also paste JSON here and import it."></textarea>
+						</div>
+					</div>
+				</div>
+			</main>
+
+			<aside class="panel">
+				<div class="panel-header">
+					<h2>Properties</h2>
+					<p>Maintain the reusable property list and view the current one-to-many mappings.</p>
+				</div>
+				<div class="panel-body stack">
+					<div class="quick-add">
+						<input id="newPropertyName" type="text" placeholder="New property name">
+						<button id="addPropertyBtn" type="button">Add property</button>
+					</div>
+
+					<div class="stack">
+						<div class="field">
+							<label for="propertyListSelect">Property list</label>
+							<select id="propertyListSelect" size="8"></select>
+						</div>
+						<div class="field">
+							<label for="propertyNameInput">Rename selected property</label>
+							<input id="propertyNameInput" type="text" placeholder="Property name">
+						</div>
+						<div class="toolbar">
+							<button id="savePropertyBtn" type="button">Save property</button>
+							<button id="removePropertyBtn" class="danger" type="button">Remove property</button>
+						</div>
+					</div>
+
+					<div>
+						<h3 style="margin: 0 0 10px;">Item to property relations</h3>
+						<div id="relationList" class="relation-list"></div>
+					</div>
+				</div>
+			</aside>
+		</section>
+	</div>
+
+	<script>
+		const starterProperties = [
+			"material",
+			"component",
+			"tool",
+			"weapon",
+			"armour",
+			"wearable",
+			"hammering",
+			"cutting"
+		];
+
+		const state = {
+			products: [
+				{
+					id: crypto.randomUUID(),
+					name: "Iron Hammer",
+					code: "TOOL-001",
+					description: "Heavy hammer for shaping heated metal and driving wedges.",
+					propertyIds: []
+				},
+				{
+					id: crypto.randomUUID(),
+					name: "Steel Sword",
+					code: "WPN-004",
+					description: "Balanced blade for close combat and precision cuts.",
+					propertyIds: []
+				},
+				{
+					id: crypto.randomUUID(),
+					name: "Leather Apron",
+					code: "WRB-002",
+					description: "Protective workshop wear with reinforced front panels.",
+					propertyIds: []
+				},
+				{
+					id: crypto.randomUUID(),
+					name: "Oak Handle",
+					code: "CMP-017",
+					description: "Prepared wooden handle for tools, axes, and custom assemblies.",
+					propertyIds: []
+				}
+			],
+			properties: starterProperties.map((name) => ({ id: crypto.randomUUID(), name })),
+			selectedProductId: null,
+			selectedPropertyId: null
+		};
+
+		const productPropertyMap = {
+			"Iron Hammer": ["tool", "hammering", "component"],
+			"Steel Sword": ["weapon", "tool", "cutting", "material"],
+			"Leather Apron": ["wearable", "armour", "material"],
+			"Oak Handle": ["component", "material"]
+		};
+
+		const productList = document.getElementById("productList");
+		const newProductName = document.getElementById("newProductName");
+		const addProductBtn = document.getElementById("addProductBtn");
+		const removeProductBtn = document.getElementById("removeProductBtn");
+
+		const productEditor = document.getElementById("productEditor");
+		const emptyEditorState = document.getElementById("emptyEditorState");
+		const productName = document.getElementById("productName");
+		const productCode = document.getElementById("productCode");
+		const productDescription = document.getElementById("productDescription");
+		const propertyCheckboxes = document.getElementById("propertyCheckboxes");
+		const selectedProductTags = document.getElementById("selectedProductTags");
+
+		const propertyListSelect = document.getElementById("propertyListSelect");
+		const newPropertyName = document.getElementById("newPropertyName");
+		const propertyNameInput = document.getElementById("propertyNameInput");
+		const addPropertyBtn = document.getElementById("addPropertyBtn");
+		const savePropertyBtn = document.getElementById("savePropertyBtn");
+		const removePropertyBtn = document.getElementById("removePropertyBtn");
+		const relationList = document.getElementById("relationList");
+
+		const exportBtn = document.getElementById("exportBtn");
+		const downloadBtn = document.getElementById("downloadBtn");
+		const importBtn = document.getElementById("importBtn");
+		const importFileInput = document.getElementById("importFileInput");
+		const jsonArea = document.getElementById("jsonArea");
+		const statusBox = document.getElementById("statusBox");
+		const statusText = document.getElementById("statusText");
+
+		function seedRelations() {
+			state.products.forEach((product) => {
+				const relationNames = productPropertyMap[product.name] || [];
+				product.propertyIds = relationNames
+					.map((relationName) => state.properties.find((property) => property.name === relationName)?.id)
+					.filter(Boolean);
+			});
+		}
+
+		function setStatus(title, message, tone = "default") {
+			statusBox.querySelector("strong").textContent = title;
+			statusText.textContent = message;
+			statusBox.style.borderColor = tone === "error"
+				? "rgba(159, 47, 47, 0.38)"
+				: tone === "success"
+					? "rgba(47, 125, 77, 0.38)"
+					: "rgba(141, 67, 25, 0.18)";
+		}
+
+		function selectedProduct() {
+			return state.products.find((product) => product.id === state.selectedProductId) || null;
+		}
+
+		function selectedProperty() {
+			return state.properties.find((property) => property.id === state.selectedPropertyId) || null;
+		}
+
+		function sanitizeState(data) {
+			if (!data || typeof data !== "object") {
+				throw new Error("Imported JSON must be an object.");
+			}
+
+			if (!Array.isArray(data.products) || !Array.isArray(data.properties)) {
+				throw new Error("JSON must contain products and properties arrays.");
+			}
+
+			const properties = data.properties
+				.map((property) => {
+					const name = String(property?.name || "").trim();
+					if (!name) {
+						return null;
+					}
+
+					return {
+						id: String(property.id || crypto.randomUUID()),
+						name
+					};
+				})
+				.filter(Boolean);
+
+			const validPropertyIds = new Set(properties.map((property) => property.id));
+
+			const products = data.products
+				.map((product) => {
+					const name = String(product?.name || "").trim();
+					if (!name) {
+						return null;
+					}
+
+					const propertyIds = Array.isArray(product.propertyIds)
+						? product.propertyIds.filter((propertyId) => validPropertyIds.has(String(propertyId))).map(String)
+						: [];
+
+					return {
+						id: String(product.id || crypto.randomUUID()),
+						name,
+						code: String(product.code || ""),
+						description: String(product.description || ""),
+						propertyIds
+					};
+				})
+				.filter(Boolean);
+
+			if (!properties.length) {
+				throw new Error("Import must include at least one property.");
+			}
+
+			return { products, properties };
+		}
+
+		function exportState() {
+			return JSON.stringify(
+				{
+					products: state.products,
+					properties: state.properties
+				},
+				null,
+				2
+			);
+		}
+
+		function renderProducts() {
+			productList.innerHTML = "";
+
+			state.products.forEach((product) => {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "list-item" + (product.id === state.selectedProductId ? " active" : "");
+				button.addEventListener("click", () => {
+					state.selectedProductId = product.id;
+					render();
+				});
+
+				const left = document.createElement("div");
+				left.innerHTML = `<strong>${escapeHtml(product.name)}</strong><br><small>${escapeHtml(product.code || "No code")}</small>`;
+
+				const right = document.createElement("small");
+				right.textContent = `${product.propertyIds.length} prop`;
+
+				button.append(left, right);
+				productList.appendChild(button);
+			});
+
+			if (!state.products.length) {
+				const empty = document.createElement("p");
+				empty.className = "hint";
+				empty.textContent = "No products yet.";
+				productList.appendChild(empty);
+			}
+
+			removeProductBtn.disabled = !selectedProduct();
+		}
+
+		function renderEditor() {
+			const product = selectedProduct();
+			const hasSelection = Boolean(product);
+
+			productEditor.classList.toggle("hidden", !hasSelection);
+			emptyEditorState.classList.toggle("hidden", hasSelection);
+
+			if (!product) {
+				return;
+			}
+
+			productName.value = product.name;
+			productCode.value = product.code;
+			productDescription.value = product.description;
+
+			propertyCheckboxes.innerHTML = "";
+
+			state.properties.forEach((property) => {
+				const label = document.createElement("label");
+				label.className = "check-pill";
+
+				const checkbox = document.createElement("input");
+				checkbox.type = "checkbox";
+				checkbox.checked = product.propertyIds.includes(property.id);
+				checkbox.addEventListener("change", () => {
+					toggleProperty(product.id, property.id, checkbox.checked);
+				});
+
+				const text = document.createElement("span");
+				text.textContent = property.name;
+
+				label.append(checkbox, text);
+				propertyCheckboxes.appendChild(label);
+			});
+
+			renderSelectedProductTags(product);
+		}
+
+		function renderSelectedProductTags(product) {
+			selectedProductTags.innerHTML = "";
+
+			const tags = getPropertyNames(product.propertyIds);
+			if (!tags.length) {
+				const tag = document.createElement("span");
+				tag.className = "tag empty";
+				tag.textContent = "No properties linked";
+				selectedProductTags.appendChild(tag);
+				return;
+			}
+
+			tags.forEach((name) => {
+				const tag = document.createElement("span");
+				tag.className = "tag";
+				tag.textContent = name;
+				selectedProductTags.appendChild(tag);
+			});
+		}
+
+		function renderProperties() {
+			propertyListSelect.innerHTML = "";
+
+			state.properties.forEach((property) => {
+				const option = document.createElement("option");
+				option.value = property.id;
+				option.textContent = property.name;
+				option.selected = property.id === state.selectedPropertyId;
+				propertyListSelect.appendChild(option);
+			});
+
+			const property = selectedProperty();
+			propertyNameInput.value = property ? property.name : "";
+			savePropertyBtn.disabled = !property;
+			removePropertyBtn.disabled = !property;
+		}
+
+		function renderRelations() {
+			relationList.innerHTML = "";
+
+			state.products.forEach((product) => {
+				const card = document.createElement("div");
+				card.className = "relation-card";
+
+				const title = document.createElement("strong");
+				title.textContent = product.name;
+
+				const tagRow = document.createElement("div");
+				tagRow.className = "tag-row";
+
+				const names = getPropertyNames(product.propertyIds);
+				if (names.length) {
+					names.forEach((name) => {
+						const tag = document.createElement("span");
+						tag.className = "tag";
+						tag.textContent = name;
+						tagRow.appendChild(tag);
+					});
+				} else {
+					const empty = document.createElement("span");
+					empty.className = "tag empty";
+					empty.textContent = "No linked properties";
+					tagRow.appendChild(empty);
+				}
+
+				card.append(title, tagRow);
+				relationList.appendChild(card);
+			});
+		}
+
+		function renderJsonArea() {
+			jsonArea.value = exportState();
+		}
+
+		function render() {
+			if (!selectedProduct() && state.products.length) {
+				state.selectedProductId = state.products[0].id;
+			}
+
+			if (!selectedProperty() && state.properties.length) {
+				state.selectedPropertyId = state.properties[0].id;
+			}
+
+			renderProducts();
+			renderEditor();
+			renderProperties();
+			renderRelations();
+		}
+
+		function getPropertyNames(propertyIds) {
+			return propertyIds
+				.map((propertyId) => state.properties.find((property) => property.id === propertyId)?.name)
+				.filter(Boolean);
+		}
+
+		function toggleProperty(productId, propertyId, enabled) {
+			const product = state.products.find((entry) => entry.id === productId);
+			if (!product) {
+				return;
+			}
+
+			const nextSet = new Set(product.propertyIds);
+			if (enabled) {
+				nextSet.add(propertyId);
+			} else {
+				nextSet.delete(propertyId);
+			}
+
+			product.propertyIds = [...nextSet];
+			renderProducts();
+			renderSelectedProductTags(product);
+			renderRelations();
+			renderJsonArea();
+			setStatus("Relation updated", `${product.name} now has ${product.propertyIds.length} linked properties.`, "success");
+		}
+
+		function addProduct() {
+			const name = newProductName.value.trim();
+			if (!name) {
+				setStatus("Missing name", "Enter a product name before adding it.", "error");
+				return;
+			}
+
+			const product = {
+				id: crypto.randomUUID(),
+				name,
+				code: "",
+				description: "",
+				propertyIds: []
+			};
+
+			state.products.push(product);
+			state.selectedProductId = product.id;
+			newProductName.value = "";
+			render();
+			renderJsonArea();
+			setStatus("Product added", `${name} was added to the registry.`, "success");
+		}
+
+		function removeSelectedProduct() {
+			const product = selectedProduct();
+			if (!product) {
+				return;
+			}
+
+			state.products = state.products.filter((entry) => entry.id !== product.id);
+			state.selectedProductId = state.products[0]?.id || null;
+			render();
+			renderJsonArea();
+			setStatus("Product removed", `${product.name} was removed.`, "success");
+		}
+
+		function addProperty() {
+			const name = newPropertyName.value.trim();
+			if (!name) {
+				setStatus("Missing name", "Enter a property name before adding it.", "error");
+				return;
+			}
+
+			const duplicate = state.properties.some((property) => property.name.toLowerCase() === name.toLowerCase());
+			if (duplicate) {
+				setStatus("Duplicate property", "Property names should be unique.", "error");
+				return;
+			}
+
+			const property = { id: crypto.randomUUID(), name };
+			state.properties.push(property);
+			state.selectedPropertyId = property.id;
+			newPropertyName.value = "";
+			render();
+			renderJsonArea();
+			setStatus("Property added", `${name} is now available to all products.`, "success");
+		}
+
+		function saveSelectedProperty() {
+			const property = selectedProperty();
+			if (!property) {
+				return;
+			}
+
+			const name = propertyNameInput.value.trim();
+			if (!name) {
+				setStatus("Missing name", "Property name cannot be empty.", "error");
+				return;
+			}
+
+			const duplicate = state.properties.some((entry) => entry.id !== property.id && entry.name.toLowerCase() === name.toLowerCase());
+			if (duplicate) {
+				setStatus("Duplicate property", "Property names should be unique.", "error");
+				return;
+			}
+
+			property.name = name;
+			render();
+			renderJsonArea();
+			setStatus("Property saved", `${name} was updated.`, "success");
+		}
+
+		function removeSelectedProperty() {
+			const property = selectedProperty();
+			if (!property) {
+				return;
+			}
+
+			state.properties = state.properties.filter((entry) => entry.id !== property.id);
+			state.products.forEach((product) => {
+				product.propertyIds = product.propertyIds.filter((propertyId) => propertyId !== property.id);
+			});
+
+			state.selectedPropertyId = state.properties[0]?.id || null;
+			render();
+			renderJsonArea();
+			setStatus("Property removed", `${property.name} was removed from the registry and all item relations.`, "success");
+		}
+
+		function updateSelectedProductField(field, value) {
+			const product = selectedProduct();
+			if (!product) {
+				return;
+			}
+
+			product[field] = value;
+			renderProducts();
+			renderRelations();
+			renderJsonArea();
+		}
+
+		function importFromText(rawText) {
+			try {
+				const parsed = JSON.parse(rawText);
+				const next = sanitizeState(parsed);
+				state.products = next.products;
+				state.properties = next.properties;
+				state.selectedProductId = state.products[0]?.id || null;
+				state.selectedPropertyId = state.properties[0]?.id || null;
+				render();
+				renderJsonArea();
+				setStatus("Import complete", `Loaded ${state.products.length} products and ${state.properties.length} properties from JSON.`, "success");
+			} catch (error) {
+				setStatus("Import failed", error.message, "error");
+			}
+		}
+
+		function downloadJson() {
+			const blob = new Blob([exportState()], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = "product-registry.json";
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			setStatus("Export ready", "JSON download started.", "success");
+		}
+
+		function escapeHtml(value) {
+			return String(value)
+				.replaceAll("&", "&amp;")
+				.replaceAll("<", "&lt;")
+				.replaceAll(">", "&gt;")
+				.replaceAll('"', "&quot;")
+				.replaceAll("'", "&#39;");
+		}
+
+		addProductBtn.addEventListener("click", addProduct);
+		removeProductBtn.addEventListener("click", removeSelectedProduct);
+		addPropertyBtn.addEventListener("click", addProperty);
+		savePropertyBtn.addEventListener("click", saveSelectedProperty);
+		removePropertyBtn.addEventListener("click", removeSelectedProperty);
+
+		propertyListSelect.addEventListener("change", () => {
+			state.selectedPropertyId = propertyListSelect.value || null;
+			renderProperties();
+		});
+
+		productName.addEventListener("input", (event) => {
+			updateSelectedProductField("name", event.target.value);
+		});
+
+		productCode.addEventListener("input", (event) => {
+			updateSelectedProductField("code", event.target.value);
+		});
+
+		productDescription.addEventListener("input", (event) => {
+			updateSelectedProductField("description", event.target.value);
+		});
+
+		exportBtn.addEventListener("click", () => {
+			renderJsonArea();
+			setStatus("Export complete", "Registry JSON was written into the text area.", "success");
+		});
+
+		downloadBtn.addEventListener("click", downloadJson);
+
+		importBtn.addEventListener("click", () => {
+			importFromText(jsonArea.value);
+		});
+
+		importFileInput.addEventListener("change", async (event) => {
+			const file = event.target.files?.[0];
+			if (!file) {
+				return;
+			}
+
+			const text = await file.text();
+			importFromText(text);
+			importFileInput.value = "";
+		});
+
+		newProductName.addEventListener("keydown", (event) => {
+			if (event.key === "Enter") {
+				addProduct();
+			}
+		});
+
+		newPropertyName.addEventListener("keydown", (event) => {
+			if (event.key === "Enter") {
+				addProperty();
+			}
+		});
+
+		seedRelations();
+		state.selectedProductId = state.products[0]?.id || null;
+		state.selectedPropertyId = state.properties[0]?.id || null;
+		render();
+		renderJsonArea();
+	</script>
+</body>
+</html>
